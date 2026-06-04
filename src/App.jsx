@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// Pages
+// Pages - Fase 1 (Score Tracker)
 import { Home } from './pages/Home';
 import { CreateGroup } from './pages/CreateGroup';
 import { JoinGroup } from './pages/JoinGroup';
@@ -13,13 +13,15 @@ import { Stats } from './pages/Stats';
 import { Rules } from './pages/Rules';
 import { MyGroups } from './pages/MyGroups';
 
-/**
- * Main App component with routing
- */
+// Pages - Fase 2 (Game Engine)
+import { PlaySetup } from './pages/PlaySetup';
+import { PlayGame } from './pages/PlayGame';
+
 function App() {
   return (
     <Router>
       <Routes>
+        {/* Fase 1 - Score Tracker */}
         <Route path="/" element={<Home />} />
         <Route path="/create" element={<CreateGroup />} />
         <Route path="/join" element={<JoinGroup />} />
@@ -30,6 +32,12 @@ function App() {
         <Route path="/game/:groupCode/history" element={<History />} />
         <Route path="/game/:groupCode/stats" element={<Stats />} />
         <Route path="/rules" element={<Rules />} />
+
+        {/* Fase 2 - Game Engine */}
+        <Route path="/play/setup" element={<PlaySetup />} />
+        <Route path="/play/game" element={<PlayGame />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

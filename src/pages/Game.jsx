@@ -19,32 +19,44 @@ export function Game() {
   const [standings, setStandings] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Initialize group dan game
+  // Initialize group dari URL parameter
   useEffect(() => {
     const init = async () => {
       if (!group) {
+        console.log('Fetching group with code:', groupCode);
         const result = await fetchGroup(groupCode);
         if (!result) {
+          console.error('Group not found');
           navigate('/');
         }
-      } else if (!game) {
+      }
+    };
+    init();
+  }, [groupCode, group, fetchGroup, navigate]);
+
+  // Initialize game setelah group tersedia
+  useEffect(() => {
+    const init = async () => {
+      if (group?.id && !game) {
+        console.log('Creating/fetching game for group:', group.id);
         await getOrCreateGame();
       }
     };
     init();
-  }, []);
+  }, [group?.id, game, getOrCreateGame]);
 
-  // Fetch rounds dari database saat game berubah
+  // Fetch rounds setelah game tersedia
   useEffect(() => {
     if (game?.id) {
+      console.log('Fetching rounds for game:', game.id);
       fetchRounds(game.id);
     }
-  }, [game?.id]);
+  }, [game?.id, fetchRounds]);
 
   // Auto-refresh standings saat user kembali ke halaman
   useEffect(() => {
     const handleFocus = () => {
-      console.log('Page focus - refreshing standings');
+      console.log('Page focus - refreshing standings and rounds');
       if (game?.id) {
         fetchRounds(game.id);
         setRefreshTrigger(prev => prev + 1);
@@ -53,7 +65,7 @@ export function Game() {
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [game?.id]);
+  }, [game?.id, fetchRounds]);
 
   // Calculate standings setiap kali rounds berubah atau refresh dipicu
   useEffect(() => {
@@ -66,7 +78,7 @@ export function Game() {
       }
     };
     loadStandings();
-  }, [game?.id, rounds.length, refreshTrigger, players.length]);
+  }, [game?.id, rounds.length, refreshTrigger, players.length, getGameStandings]);
 
   const handleManualRefresh = async () => {
     if (game?.id) {
@@ -101,7 +113,7 @@ export function Game() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 pb-28 relative">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 pb-40 relative">
       {/* Background decoration */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl"></div>

@@ -74,6 +74,14 @@ export function Home() {
           👥 Gabung Grup
         </button>
 
+        {/* Play Game Button (Fase 2) */}
+        <button
+          onClick={() => navigate('/play/setup')}
+          className="w-full bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-400 hover:to-pink-500 text-white font-bold py-5 px-6 rounded-xl mb-3 transition-all transform hover:scale-105 hover:-translate-y-1 shadow-xl border border-pink-400/30 text-lg"
+        >
+          🎮 Mulai Game
+        </button>
+
         {/* My Groups Button */}
         <button
           onClick={() => navigate('/mygroups')}

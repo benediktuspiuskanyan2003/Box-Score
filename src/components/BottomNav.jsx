@@ -17,8 +17,8 @@ export function BottomNav({ groupCode }) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-slate-900 to-slate-800 border-t-2 border-purple-500 shadow-2xl">
-      <div className="flex justify-around items-center px-2">
+    <nav className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-slate-900 to-slate-800 border-t-2 border-purple-500 shadow-2xl z-50">
+      <div className="flex justify-around items-center px-2 pb-2">
         {navItems.map(item => (
           <Link
             key={item.path}

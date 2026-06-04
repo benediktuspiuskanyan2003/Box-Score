@@ -16,10 +16,12 @@ export function useGame(groupId) {
   const getOrCreateGame = async () => {
     // Guard: jangan proceed jika groupId undefined
     if (!groupId) {
+      console.error('getOrCreateGame: groupId is undefined');
       setError('Group ID is required to create/fetch game');
       return null;
     }
 
+    console.log('getOrCreateGame: Looking for game with groupId:', groupId);
     setLoading(true);
     setError(null);
     try {
@@ -32,28 +34,38 @@ export function useGame(groupId) {
         .order('started_at', { ascending: false })
         .limit(1);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('getOrCreateGame fetch error:', fetchError);
+        throw fetchError;
+      }
 
       if (data && data.length > 0) {
         // Game already exists
+        console.log('getOrCreateGame: Found existing game:', data[0].id);
         setGame(data[0]);
         await fetchRounds(data[0].id);
         return data[0];
       } else {
         // Create new game
+        console.log('getOrCreateGame: Creating new game');
         const { data: newGame, error: createError } = await supabase
           .from('games')
           .insert([{ group_id: groupId }])
           .select()
           .single();
 
-        if (createError) throw createError;
+        if (createError) {
+          console.error('getOrCreateGame create error:', createError);
+          throw createError;
+        }
 
+        console.log('getOrCreateGame: New game created:', newGame.id);
         setGame(newGame);
         setRounds([]);
         return newGame;
       }
     } catch (err) {
+      console.error('getOrCreateGame catch error:', err.message);
       setError(err.message);
       return null;
     } finally {
@@ -66,17 +78,23 @@ export function useGame(groupId) {
    */
   const fetchRounds = async (gameId) => {
     try {
+      console.log('fetchRounds: Fetching rounds for game ID:', gameId);
       const { data, error: fetchError } = await supabase
         .from('rounds')
         .select('*, round_scores(*)')
         .eq('game_id', gameId)
         .order('round_number', { ascending: true });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('fetchRounds error:', fetchError);
+        throw fetchError;
+      }
 
+      console.log('fetchRounds: Found', data?.length || 0, 'rounds');
       setRounds(data || []);
       return data || [];
     } catch (err) {
+      console.error('fetchRounds catch error:', err.message);
       setError(err.message);
       return [];
     }

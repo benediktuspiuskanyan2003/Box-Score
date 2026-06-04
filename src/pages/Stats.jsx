@@ -123,7 +123,7 @@ export function Stats() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-28">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 pb-40">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-6">
