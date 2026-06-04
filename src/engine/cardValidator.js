@@ -113,36 +113,51 @@ function checkConsecutive(values, jokerCount, aPosition) {
 }
 
 /**
- * Check apakah kartu bisa membuat BOX yang valid
- * @param {Array} cards - Kartu yang dipilih
- * @param {boolean} isSunFirstPhase - Apakah masih di fase Sun pertama
- * @returns {Object} { valid: boolean, reason: string }
+ * Hitung rank-rank (numeric values) yang sudah diisi Joker dalam sebuah Sun.
+ * 
+ * Cara kerja:
+ * - Tentukan range sequence dari nilai minimum hingga maksimum non-Joker
+ * - Slot dalam range yang tidak diisi non-Joker = diisi Joker
+ * 
+ * Contoh: Sun [10, J, Joker, K] → non-Joker values = [10,11,13]
+ *   range = 10-13, slot terisi = {10,11,13}, maka Joker occupies {12} (Q)
+ * 
+ * @param {Array} sunCards - Kartu di Sun saat ini
+ * @returns {Set<number>} Set of numeric values yang di-occupy Joker
  */
-export function isValidBox(cards, isSunFirstPhase = false) {
-  if (!Array.isArray(cards) || cards.length < 3) {
-    return { valid: false, reason: `Box harus minimal 3 kartu, dapat ${cards.length}` };
+function getJokerOccupiedValues(sunCards) {
+  const nonJokers = sunCards.filter(c => !c.isJoker);
+  const jokers = sunCards.filter(c => c.isJoker);
+
+  if (jokers.length === 0) return new Set();
+  if (nonJokers.length === 0) return new Set();
+
+  // Dapatkan nilai numerik semua non-Joker, handle A sebagai 14 jika ada K
+  let values = nonJokers.map(c => getCardValue(c.rank));
+
+  // Handle A: jika ada A (value=1) dan ada K (value=13) atau Q (value=12),
+  // treat A sebagai 14 untuk hitung range yang benar
+  const hasAce = values.includes(1);
+  const hasHighCard = values.some(v => v >= 11); // J, Q, K
+  if (hasAce && hasHighCard) {
+    values = values.map(v => v === 1 ? 14 : v);
   }
 
-  // Pisahkan Joker dan non-Joker
-  const jokers = cards.filter(c => c.isJoker);
-  const nonJokers = cards.filter(c => !c.isJoker);
+  const sorted = [...values].sort((a, b) => a - b);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
 
-  // Cek semua non-Joker angka sama
-  if (nonJokers.length === 0) {
-    return { valid: false, reason: 'Box harus ada minimal 1 kartu non-Joker' };
+  // Kumpulkan semua slot dalam range
+  const filledSlots = new Set(values);
+  const jokerOccupied = new Set();
+
+  for (let v = min; v <= max; v++) {
+    if (!filledSlots.has(v)) {
+      jokerOccupied.add(v);
+    }
   }
 
-  const firstRank = nonJokers[0].rank;
-  if (!nonJokers.every(c => c.rank === firstRank)) {
-    return { valid: false, reason: 'Semua kartu di Box harus angka/rank sama' };
-  }
-
-  // Max 8 kartu per rank (2 set × 4 suit + joker sebagai bonus)
-  if (cards.length > 8) {
-    return { valid: false, reason: `Box tidak bisa lebih dari 8 kartu (max 8 ${firstRank})` };
-  }
-
-  return { valid: true };
+  return jokerOccupied;
 }
 
 /**
@@ -170,9 +185,6 @@ export function checkFirstSun(playerCards) {
  * @returns {boolean}
  */
 export function checkCateTangan(playerCards) {
-  // Cek setiap kombinasi 8 kartu dari tangan
-  // Tapi praktisnya, cek setiap suit apakah ada 8 kartu berurutan
-  
   const bySuit = { '♠': [], '♥': [], '♣': [], '♦': [] };
   playerCards.forEach(c => {
     if (!c.isJoker) {
@@ -183,7 +195,6 @@ export function checkCateTangan(playerCards) {
   for (const suit in bySuit) {
     const cards = bySuit[suit];
     
-    // Cek apakah ada 8 kartu berurutan di suit ini
     for (let startIdx = 0; startIdx <= cards.length - 8; startIdx++) {
       const subset = cards.slice(startIdx, startIdx + 8);
       if (isValidSun(subset).valid) {
@@ -196,9 +207,41 @@ export function checkCateTangan(playerCards) {
 }
 
 /**
+ * Check apakah kartu bisa membuat BOX yang valid
+ * @param {Array} cards - Kartu yang dipilih
+ * @param {boolean} isSunFirstPhase - Apakah masih di fase Sun pertama
+ * @returns {Object} { valid: boolean, reason: string }
+ */
+export function isValidBox(cards, isSunFirstPhase = false) {
+  if (!Array.isArray(cards) || cards.length < 3) {
+    return { valid: false, reason: `Box harus minimal 3 kartu, dapat ${cards.length}` };
+  }
+
+  // Pisahkan Joker dan non-Joker
+  const jokers = cards.filter(c => c.isJoker);
+  const nonJokers = cards.filter(c => !c.isJoker);
+
+  if (nonJokers.length === 0) {
+    return { valid: false, reason: 'Box harus ada minimal 1 kartu non-Joker' };
+  }
+
+  const firstRank = nonJokers[0].rank;
+  if (!nonJokers.every(c => c.rank === firstRank)) {
+    return { valid: false, reason: 'Semua kartu di Box harus angka/rank sama' };
+  }
+
+  // Max 8 kartu per rank (2 set × 4 suit + joker sebagai bonus)
+  if (cards.length > 8) {
+    return { valid: false, reason: `Box tidak bisa lebih dari 8 kartu (max 8 ${firstRank})` };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Check apakah kartu bisa disambung ke Sun yang sudah ada
  * @param {Array} sunCards - Kartu di Sun saat ini
- * @param {Array} playCard - Kartu yang akan di-play
+ * @param {Object} playCard - Kartu yang akan di-play
  * @param {String} position - 'left', 'right', atau 'fill'
  * @returns {Object} { valid: boolean, reason: string }
  */
@@ -209,6 +252,15 @@ export function canExtendSun(sunCards, playCard, position) {
 
   if (sunCards.length >= 13) {
     return { valid: false, reason: 'Sun sudah penuh (13 kartu max)' };
+  }
+
+  // ✅ FIX: Cek apakah rank kartu ini sudah diisi Joker di Sun
+  if (!playCard.isJoker) {
+    const jokerOccupied = getJokerOccupiedValues(sunCards);
+    const cardValue = getCardValue(playCard.rank);
+    if (jokerOccupied.has(cardValue)) {
+      return { valid: false, reason: `Slot rank ${playCard.rank} sudah diisi Joker` };
+    }
   }
 
   const newCards = [...sunCards, playCard];
@@ -253,6 +305,9 @@ export function canExtendSunMultiple(sunCards, playCards, position) {
     return { valid: false, reason: `Simbol harus sama dengan Sun (${sunSuit})` };
   }
 
+  // ✅ FIX: Hitung slot yang sudah diisi Joker di Sun ini
+  const jokerOccupied = getJokerOccupiedValues(sunCards);
+
   // Rule 1: Single card extend
   if (playCardsCount === 1) {
     const card = playCards[0];
@@ -262,36 +317,40 @@ export function canExtendSunMultiple(sunCards, playCards, position) {
       return { valid: false, reason: 'Joker tidak boleh dikeluarkan sendiri' };
     }
 
+    // ✅ FIX: Cek konflik dengan slot Joker
+    const cardValue = getCardValue(card.rank);
+    if (jokerOccupied.has(cardValue)) {
+      return { valid: false, reason: `Slot rank ${card.rank} sudah diisi Joker di Sun ini` };
+    }
+
     const sunFirst = sunCards[0];
     const sunLast = sunCards[sunCards.length - 1];
-    let cardValue = getCardValue(card.rank);
+    let cardVal = getCardValue(card.rank);
     
     if (position === 'left') {
-      const firstValue = getCardValue(sunFirst.rank);
       // A special case
       if (card.rank === 'A') {
+        const firstValue = getCardValue(sunFirst.rank);
         if (firstValue === 2) {
-          cardValue = 1;
+          cardVal = 1;
         } else {
           return { valid: false, reason: `A tidak bisa disambung di kiri` };
         }
       }
-      // Try append & check dengan isValidSun - more flexible untuk handle Joker
       const testSun = [card, ...sunCards];
       if (!isValidSun(testSun).valid) {
         return { valid: false, reason: `Kartu tidak bisa disambung di kiri` };
       }
     } else if (position === 'right') {
-      const lastValue = getCardValue(sunLast.rank);
       // A special case
       if (card.rank === 'A') {
+        const lastValue = getCardValue(sunLast.rank);
         if (lastValue === 13) {
-          cardValue = 14;
+          cardVal = 14;
         } else {
           return { valid: false, reason: `A tidak bisa disambung di kanan` };
         }
       }
-      // Try append & check dengan isValidSun - more flexible untuk handle Joker
       const testSun = [...sunCards, card];
       if (!isValidSun(testSun).valid) {
         return { valid: false, reason: `Kartu tidak bisa disambung di kanan` };
@@ -301,18 +360,24 @@ export function canExtendSunMultiple(sunCards, playCards, position) {
 
   // Rule 2: Two card extend
   if (playCardsCount === 2) {
-    // Joker boleh sebagai pengganti tapi tidak boleh keduanya Joker
     const jokerCount = playCards.filter(c => c.isJoker).length;
     if (jokerCount === 2) {
       return { valid: false, reason: 'Tidak boleh semua kartu Joker' };
     }
 
-    // Sort by value (Joker value = 100 untuk sorting, treat separately)
     const nonJokers = playCards.filter(c => !c.isJoker);
     const jokers = playCards.filter(c => c.isJoker);
     
     if (nonJokers.length === 0) {
       return { valid: false, reason: 'Harus ada minimal 1 kartu non-Joker' };
+    }
+
+    // ✅ FIX: Cek konflik semua non-Joker play cards dengan slot Joker di Sun
+    for (const card of nonJokers) {
+      const cardValue = getCardValue(card.rank);
+      if (jokerOccupied.has(cardValue)) {
+        return { valid: false, reason: `Slot rank ${card.rank} sudah diisi Joker di Sun ini` };
+      }
     }
 
     // Check apakah play cards berurutan
@@ -336,14 +401,12 @@ export function canExtendSunMultiple(sunCards, playCards, position) {
     
     if (position === 'left') {
       const firstSunValue = getCardValue(sunFirst.rank);
-      // Max value dari play cards harus exactly firstSunValue - 1 atau firstSunValue - 2
       const maxPlay = Math.max(firstPlayValue, lastPlayValue);
       if (maxPlay !== firstSunValue - 1 && maxPlay !== firstSunValue - 2) {
         return { valid: false, reason: `Tidak bisa extend kiri dengan nilai ini` };
       }
     } else if (position === 'right') {
       const lastSunValue = getCardValue(sunLast.rank);
-      // Min value dari play cards harus exactly lastSunValue + 1 atau lastSunValue + 2
       const minPlay = Math.min(firstPlayValue, lastPlayValue);
       if (minPlay !== lastSunValue + 1 && minPlay !== lastSunValue + 2) {
         return { valid: false, reason: `Tidak bisa extend kanan dengan nilai ini` };
@@ -380,8 +443,7 @@ export function getValidMoves(playerCards, sunList = [], boxList = []) {
     for (let cardIdx = 0; cardIdx < playerCards.length; cardIdx++) {
       const card = playerCards[cardIdx];
       
-      // Cek bisa disambung ke kiri/kanan/tengah
-      if (canExtendSun(sun, card, 'left').valid) {
+      if (canExtendSun(sun.cards, card, 'left').valid) {
         validMoves.push({
           type: 'extend_sun',
           sunIdx,
@@ -389,7 +451,7 @@ export function getValidMoves(playerCards, sunList = [], boxList = []) {
           position: 'left'
         });
       }
-      if (canExtendSun(sun, card, 'right').valid) {
+      if (canExtendSun(sun.cards, card, 'right').valid) {
         validMoves.push({
           type: 'extend_sun',
           sunIdx,
@@ -415,7 +477,7 @@ export function getValidMoves(playerCards, sunList = [], boxList = []) {
     }
   }
 
-  // Check move: buat BOX baru (jika tidak di first Sun phase)
+  // Check move: buat BOX baru
   for (let i = 0; i < playerCards.length; i++) {
     for (let j = i + 1; j < playerCards.length; j++) {
       for (let k = j + 1; k < playerCards.length; k++) {
