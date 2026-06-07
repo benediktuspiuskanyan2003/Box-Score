@@ -11,11 +11,11 @@ import {
 } from './deckManager.js';
 
 import {
-  isValidSun,
+  isValidSon,
   isValidBox,
-  checkFirstSun,
+  checkFirstSon,
   checkCateTangan,
-  canExtendSunMultiple,
+  canExtendSonMultiple,
   getValidMoves
 } from './cardValidator.js';
 
@@ -82,17 +82,17 @@ export function initializeGame(players, minusLimit = -300) {
     players: playerStates,
     currentTurnIdx: 0, // Pemain pertama mulai (biasanya yang kocok)
     round: 1,
-    phase: 'first_sun', // first_sun, play, check_cate
+    phase: 'first_son', // first_son, play, check_cate
     deck: remaining, // Kartu sisa yang tidak dibagikan
     meja: {
-      suns: [], // [{id, cards, playerId}]
+      sons: [], // [{id, cards, playerId}]
       boxes: [] // [{id, cards, playerId}]
     },
     history: [], // [{playerIdx, action, timestamp}]
     minusLimit,
     gameOver: false,
     cateType: null, // 'tangan', 'normal', 'none'
-    sunFirstCompleted: [] // Pemain yang sudah keluarkan Sun pertama
+    sonFirstCompleted: [] // Pemain yang sudah keluarkan Son pertama
   };
 
   // Cek apakah ada Cate Tangan
@@ -111,9 +111,9 @@ export function initializeGame(players, minusLimit = -300) {
 }
 
 /**
- * Main function: pemain main kartu ke Sun (meja)
+ * Main function: pemain main kartu ke Son (meja)
  */
-export function playCardToSun(gameState, playerIdx, cardIdx, sunIdx, position = 'right') {
+export function playCardToSon(gameState, playerIdx, cardIdx, sonIdx, position = 'right') {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
@@ -128,25 +128,25 @@ export function playCardToSun(gameState, playerIdx, cardIdx, sunIdx, position = 
     return { success: false, reason: 'Kartu tidak ditemukan' };
   }
 
-  const sun = gameState.meja.suns[sunIdx];
-  if (!sun) {
-    return { success: false, reason: 'Sun tidak ditemukan' };
+  const son = gameState.meja.sons[sonIdx];
+  if (!son) {
+    return { success: false, reason: 'Son tidak ditemukan' };
   }
 
-  // Validasi: kartu bisa disambung ke Sun
+  // Validasi: kartu bisa disambung ke Son
   const testCards = position === 'left'
-    ? [card, ...sun.cards]
-    : [...sun.cards, card];
+    ? [card, ...son.cards]
+    : [...son.cards, card];
 
-  if (!isValidSun(testCards).valid) {
-    return { success: false, reason: 'Kartu tidak bisa disambung ke Sun ini' };
+  if (!isValidSon(testCards).valid) {
+    return { success: false, reason: 'Kartu tidak bisa disambung ke Son ini' };
   }
 
-  // Update Sun
+  // Update Son
   if (position === 'left') {
-    sun.cards.unshift(card);
+    son.cards.unshift(card);
   } else {
-    sun.cards.push(card);
+    son.cards.push(card);
   }
 
   // Remove kartu dari hand
@@ -155,8 +155,8 @@ export function playCardToSun(gameState, playerIdx, cardIdx, sunIdx, position = 
   // Record move
   gameState.history.push({
     playerIdx,
-    action: 'play_to_sun',
-    sunIdx,
+    action: 'play_to_son',
+    sonIdx,
     position,
     timestamp: Date.now()
   });
@@ -173,9 +173,9 @@ export function playCardToSun(gameState, playerIdx, cardIdx, sunIdx, position = 
 }
 
 /**
- * Pemain buat Sun baru
+ * Pemain buat Son baru
  */
-export function playNewSun(gameState, playerIdx, cardIndices) {
+export function playNewSon(gameState, playerIdx, cardIndices) {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
@@ -185,10 +185,10 @@ export function playNewSun(gameState, playerIdx, cardIndices) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
-  // Enforce first SUN phase: pemain harus belum membuat Sun pertama
-  if (gameState.phase === 'first_sun') {
-    if (gameState.sunFirstCompleted.includes(playerIdx)) {
-      return { success: false, reason: 'Anda sudah membuat SUN pertama di ronde ini' };
+  // Enforce first SON phase: pemain harus belum membuat Son pertama
+  if (gameState.phase === 'first_son') {
+    if (gameState.sonFirstCompleted.includes(playerIdx)) {
+      return { success: false, reason: 'Anda sudah membuat SON pertama di ronde ini' };
     }
   }
 
@@ -199,26 +199,26 @@ export function playNewSun(gameState, playerIdx, cardIndices) {
   }
 
   // Validasi
-  if (!isValidSun(cards).valid) {
-    return { success: false, reason: 'Tidak membentuk Sun yang valid' };
+  if (!isValidSon(cards).valid) {
+    return { success: false, reason: 'Tidak membentuk Son yang valid' };
   }
 
-  // Di fase first_sun, Sun harus dari pemain yang turn-nya sekarang
-  if (gameState.phase === 'first_sun') {
-    // OK, first sun bisa dibuat
-    gameState.sunFirstCompleted.push(playerIdx);
+  // Di fase first_son, Son harus dari pemain yang turn-nya sekarang
+  if (gameState.phase === 'first_son') {
+    // OK, first son bisa dibuat
+    gameState.sonFirstCompleted.push(playerIdx);
     
-    // Cek apakah semua pemain sudah keluarkan Sun pertama
-    const needSun = gameState.players
+    // Cek apakah semua pemain sudah keluarkan Son pertama
+    const needSon = gameState.players
       .map((p, idx) => idx)
       .filter(idx => gameState.players[idx].status === 'active');
     
-    if (gameState.sunFirstCompleted.length === needSun.length) {
+    if (gameState.sonFirstCompleted.length === needSon.length) {
       gameState.phase = 'play';
     }
   }
 
-  // Create Sun - SORT KARTU ASCENDING & POSITION JOKER DI GAPS
+  // Create Son - SORT KARTU ASCENDING & POSITION JOKER DI GAPS
   // Separate jokers dan non-jokers
   const nonJokers = cards.filter(c => !c.isJoker).sort((a, b) => {
     const valA = getCardValue(a.rank);
@@ -228,7 +228,7 @@ export function playNewSun(gameState, playerIdx, cardIndices) {
   
   const jokers = cards.filter(c => c.isJoker);
   
-  // Build sun cards dengan Joker di gap jika ada
+  // Build son cards dengan Joker di gap jika ada
   let sortedCards = [];
   
   if (jokers.length === 0) {
@@ -263,13 +263,13 @@ export function playNewSun(gameState, playerIdx, cardIndices) {
     }
   }
 
-  const newSun = {
-    id: `sun_${Date.now()}`,
+  const newSon = {
+    id: `son_${Date.now()}`,
     cards: sortedCards,
     playerId: player.id
   };
 
-  gameState.meja.suns.push(newSun);
+  gameState.meja.sons.push(newSon);
 
   // Remove cards dari hand (reverse order agar index tidak berubah)
   const sortedIndices = [...cardIndices].sort((a, b) => b - a);
@@ -280,8 +280,8 @@ export function playNewSun(gameState, playerIdx, cardIndices) {
   // Record move
   gameState.history.push({
     playerIdx,
-    action: 'new_sun',
-    sunId: newSun.id,
+    action: 'new_son',
+    sonId: newSon.id,
     cardCount: cards.length,
     timestamp: Date.now()
   });
@@ -313,14 +313,14 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
   // Extract cards
   const cards = cardIndices.map(idx => player.hand[idx]).filter(c => c);
   
-  // Minimum cards validation - stricter di first_sun phase
-  const minCards = gameState.phase === 'first_sun' ? 5 : 3;
+  // Minimum cards validation - stricter di first_son phase
+  const minCards = gameState.phase === 'first_son' ? 5 : 3;
   if (cards.length < minCards) {
     return { success: false, reason: `Butuh minimal ${minCards} kartu untuk BOX` };
   }
 
   // Validasi
-  if (!isValidBox(cards, gameState.phase === 'first_sun').valid) {
+  if (!isValidBox(cards, gameState.phase === 'first_son').valid) {
     return { success: false, reason: 'Tidak membentuk Box yang valid' };
   }
 
@@ -360,14 +360,14 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
 }
 
 /**
- * Pemain extend SUN yang sudah ada (sambung kartu)
+ * Pemain extend SON yang sudah ada (sambung kartu)
  * @param {Object} gameState
  * @param {number} playerIdx
  * @param {number|Array} cardIdx atau cardIndices (1-2 kartu)
- * @param {number} sunIdx
+ * @param {number} sonIdx
  * @param {string} position 'left' atau 'right'
  */
-export function extendSun(gameState, playerIdx, cardIdx, sunIdx, position = 'right') {
+export function extendSon(gameState, playerIdx, cardIdx, sonIdx, position = 'right') {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
@@ -377,14 +377,14 @@ export function extendSun(gameState, playerIdx, cardIdx, sunIdx, position = 'rig
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
-  const sun = gameState.meja.suns[sunIdx];
-  if (!sun) {
-    return { success: false, reason: 'SUN tidak ditemukan' };
+  const son = gameState.meja.sons[sonIdx];
+  if (!son) {
+    return { success: false, reason: 'SON tidak ditemukan' };
   }
 
-  // Check Sun sudah penuh (13 kartu)
-  if (sun.cards.length >= 13) {
-    return { success: false, reason: 'SUN sudah penuh (13 kartu max)' };
+  // Check Son sudah penuh (13 kartu)
+  if (son.cards.length >= 13) {
+    return { success: false, reason: 'SON sudah penuh (13 kartu max)' };
   }
 
   // Handle both single card (cardIdx: number) and multiple cards (cardIdx: array)
@@ -401,20 +401,20 @@ export function extendSun(gameState, playerIdx, cardIdx, sunIdx, position = 'rig
   }
 
   // Validasi dengan strict rules
-  const validation = canExtendSunMultiple(sun.cards, cards, position);
+  const validation = canExtendSonMultiple(son.cards, cards, position);
   if (!validation.valid) {
     return { success: false, reason: validation.reason };
   }
 
-  // Update Sun
+  // Update Son
   if (position === 'left') {
     // Sort cards ascending sebelum prepend agar urutan benar (4-5-6-7-8-9, bukan 5-4-6-7-8-9)
     const sortedCards = [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
-    sun.cards = [...sortedCards, ...sun.cards];
+    son.cards = [...sortedCards, ...son.cards];
   } else {
     // Extend ke kanan juga perlu sort ascending (agar konsisten)
     const sortedCards = [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
-    sun.cards = [...sun.cards, ...sortedCards];
+    son.cards = [...son.cards, ...sortedCards];
   }
 
   // Remove kartu dari hand (sort descending agar index tidak berubah saat remove)
@@ -426,8 +426,8 @@ export function extendSun(gameState, playerIdx, cardIdx, sunIdx, position = 'rig
   // Record move
   gameState.history.push({
     playerIdx,
-    action: 'extend_sun',
-    sunIdx,
+    action: 'extend_son',
+    sonIdx,
     position,
     cardCount: cards.length,
     timestamp: Date.now()
@@ -575,9 +575,9 @@ function handleCate(gameState, playerIdx) {
   // Lihat history untuk find last card yang di-play (harus joker atau bukan)
   const lastMove = gameState.history[gameState.history.length - 1];
   
-  // Cek apakah ada joker di meja sekarang (dari Sun atau Box terakhir)
+  // Cek apakah ada joker di meja sekarang (dari Son atau Box terakhir)
   const allTableCards = [
-    ...gameState.meja.suns.flatMap(s => s.cards),
+    ...gameState.meja.sons.flatMap(s => s.cards),
     ...gameState.meja.boxes.flatMap(b => b.cards)
   ];
   
@@ -617,13 +617,13 @@ function handleCate(gameState, playerIdx) {
 }
 
 /**
- * Declare player gagal Sun pertama
+ * Declare player gagal Son pertama
  * Rules:
  * - 4 pemain: 1 gagal → restart, 2+ gagal → restart
  * - 5 pemain: 1 gagal → lanjut (-50), 2+ gagal → restart
  * Return: {restart: boolean} - true jika perlu restart
  */
-export function declareFailFirstSun(gameState, playerIdx) {
+export function declareFailFirstSon(gameState, playerIdx) {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
@@ -634,7 +634,7 @@ export function declareFailFirstSun(gameState, playerIdx) {
   }
 
   // Hitung fail sebelum tambah (untuk determine logic)
-  const prevFailCount = gameState.players.filter(p => p.status === 'sun_failed').length;
+  const prevFailCount = gameState.players.filter(p => p.status === 'son_failed').length;
   const playerCount = gameState.players.length;
 
   // Tentukan apakah akan restart SEBELUM mutate state
@@ -652,7 +652,7 @@ export function declareFailFirstSun(gameState, playerIdx) {
     // State akan di-reset di reducer dengan initializeGame()
     gameState.history.push({
       playerIdx,
-      action: 'declare_fail_sun',
+      action: 'declare_fail_son',
       failCount: prevFailCount + 1,
       note: 'restart',
       timestamp: Date.now()
@@ -660,12 +660,12 @@ export function declareFailFirstSun(gameState, playerIdx) {
     return { success: true, restart: true };
   } else {
     // CONTINUE: mutate state - mark pemain gagal dengan poin -50
-    player.status = 'sun_failed';
+    player.status = 'son_failed';
     player.score = -50;
 
     gameState.history.push({
       playerIdx,
-      action: 'declare_fail_sun',
+      action: 'declare_fail_son',
       failCount: prevFailCount + 1,
       score: -50,
       timestamp: Date.now()
@@ -693,7 +693,7 @@ export function getRoundScores(gameState, roundNumber) {
   const scores = gameState.players.map(player => ({
     player_id: player.id,
     is_cate: player.status === 'cate',
-    sun_failed: player.status === 'sun_failed',
+    son_failed: player.status === 'son_failed',
     card_score: player.status === 'active' ? 0 : calculateCardScore(player.hand),
     round_total: player.score,
     score_reset: false // TODO: Implement auto-reset logic
@@ -717,6 +717,12 @@ export function nextRound(gameState) {
   if (gameState.phase !== 'round_end') {
     return { success: false, reason: 'Game harus dalam phase round_end' };
   }
+
+  // STEP 1: Accumulate round scores ke totalScore sebelum reset
+  gameState.players.forEach((player) => {
+    if (!player.totalScore) player.totalScore = 0;
+    player.totalScore += player.score; // Add current round score
+  });
 
   // Shuffle & deal kartu baru
   const deck = createDeck();
@@ -749,21 +755,30 @@ export function nextRound(gameState) {
     }
   });
 
-  // Dealer rotate: next pemain menjadi first player (currentTurnIdx 0 dalam ronde baru)
-  // Tapi untuk simplicity, tetap mulai dari index 0
+  // STEP 2: Find pemain dengan TOTAL SCORE tertinggi untuk giliran pertama di ronde baru
+  let highestScoreIdx = 0;
+  let highestScore = gameState.players[0].totalScore;
   
-  // Reset state untuk ronde baru
+  gameState.players.forEach((player, idx) => {
+    if (player.totalScore > highestScore) {
+      highestScore = player.totalScore;
+      highestScoreIdx = idx;
+    }
+  });
+  
+  // Reset state untuk ronde berikutnya
   gameState.round += 1;
-  gameState.currentTurnIdx = 0;
-  gameState.phase = 'first_sun';
+  gameState.currentTurnIdx = highestScoreIdx; // Pemain dengan total score tertinggi mulai ronde berikutnya
+  gameState.phase = 'first_son';
   gameState.deck = remaining;
   gameState.meja = {
-    suns: [],
+    sons: [],
     boxes: []
   };
   gameState.cateType = cateTanganPlayers.length > 0 ? 'tangan' : null;
-  gameState.sunFirstCompleted = [];
-  gameState.history = []; // Clear history untuk ronde baru (atau bisa dipreserve jika ingin record lengkap)
+  gameState.sonFirstCompleted = [];
+  gameState.history = []; // Clear history untuk ronde berikutnya (atau bisa dipreserve jika ingin record lengkap)
 
   return { success: true, gameState };
 }
+

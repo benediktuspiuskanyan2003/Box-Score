@@ -10,3 +10,4 @@ export function generateCode() {
     () => chars[Math.floor(Math.random() * chars.length)]
   ).join('');
 }
+

@@ -27,7 +27,7 @@ function PlayingCard({ card, size = 'small' }) {
 /**
  * CardTable - Tampil Sun & Box di meja
  */
-export function CardTable({ gameState, onExtendSun, onAddToBox }) {
+export function CardTable({ gameState, onextendSon, onAddToBox }) {
   if (!gameState) return null;
 
   const { suns = [], boxes = [] } = gameState.meja;
@@ -42,7 +42,7 @@ export function CardTable({ gameState, onExtendSun, onAddToBox }) {
         <div className="mb-6">
           <h4 className="text-yellow-300 text-sm font-semibold mb-2">SUN</h4>
           <div className="flex gap-4 flex-wrap">
-            {suns.map((sun, sunIdx) => (
+            {suns.map((sun, sonIdx) => (
               <div key={sun.id} className="bg-slate-900 p-3 rounded border-2 border-yellow-500">
                 <div className="flex gap-1 mb-2">
                   {sun.cards.map((card, cardIdx) => (
@@ -88,3 +88,4 @@ export function CardTable({ gameState, onExtendSun, onAddToBox }) {
     </div>
   );
 }
+

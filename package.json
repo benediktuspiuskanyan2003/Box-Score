@@ -16,7 +16,13 @@
     "vite": "^8.0.12"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@supabase/supabase-js": "^2.106.1",
+    "clsx": "^2.1.1",
+    "firebase": "^12.14.0",
+    "react-firebase-hooks": "^5.1.1",
+    "react-hook-form": "^7.77.0",
+    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.15.1"
   }
 }

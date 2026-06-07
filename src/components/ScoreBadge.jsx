@@ -27,3 +27,4 @@ export function ScoreBadge({ score, size = 'md' }) {
     </span>
   );
 }
+

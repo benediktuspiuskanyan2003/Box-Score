@@ -109,3 +109,4 @@ export function getMinusValue(rank) {
   };
   return values[rank] || 0;
 }
+

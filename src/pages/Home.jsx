@@ -1,108 +1,158 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGroup } from '../hooks/useGroup';
+import { useAuth } from '../context/AuthContext';
 
-/**
- * Halaman utama - pilih buat grup baru atau gabung grup
- */
 export function Home() {
   const navigate = useNavigate();
-  const { getLastGroup } = useGroup();
-  const [lastGroupCode, setLastGroupCode] = React.useState(null);
+  const { user, userProfile, logout } = useAuth();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-  useEffect(() => {
-    // Check if there's a last group
-    const code = localStorage.getItem('lastGroupCode');
-    if (code) {
-      setLastGroupCode(code);
-    }
-  }, []);
-
-  const handleContinueLastGroup = () => {
-    if (lastGroupCode) {
-      navigate(`/game/${lastGroupCode}`);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
     }
   };
 
+  // Default stats if profile doesn't have them
+  const stats = {
+    totalGames: userProfile?.total_games_played || 0,
+    totalWins: userProfile?.total_wins || 0,
+    winRate: userProfile?.total_games_played ? Math.round((userProfile?.total_wins / userProfile?.total_games_played) * 100) : 0,
+    bestScore: userProfile?.best_score || 0
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative background elements */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-20 right-20 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl"></div>
-        <div className="absolute bottom-20 left-20 w-72 h-72 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl"></div>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4 overflow-hidden relative">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
       </div>
 
-      <div className="w-full max-w-sm relative z-10">
-        {/* Logo / Title */}
-        <div className="text-center mb-12">
-          {/* Animated joker logo */}
-          <div className="mb-6 transform hover:scale-110 transition-transform duration-300">
-            <div className="text-9xl animate-bounce" style={{animationDuration: '3s'}}>🃏</div>
+      <div className="relative z-10 max-w-md mx-auto">
+        {/* TOP BAR: Profile (Left) + Settings (Right) */}
+        <div className="flex items-center justify-between mb-8">
+          {/* Profile Section */}
+          <div className="relative">
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center gap-3 bg-white/90 backdrop-blur rounded-full p-2 pr-4 hover:bg-white transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full flex items-center justify-center text-xl font-bold text-white border-2 border-white">
+                {userProfile?.display_name?.charAt(0).toUpperCase() || '👤'}
+              </div>
+              <div className="text-left">
+                <div className="text-xs text-slate-500 font-semibold">Welcome</div>
+                <div className="text-sm font-bold text-slate-800 truncate max-w-[80px]">{userProfile?.display_name || 'Player'}</div>
+              </div>
+            </button>
+
+            {/* Profile Dropdown Menu */}
+            {showProfileMenu && (
+              <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 w-72 animate-in fade-in slide-in-from-top-2">
+                <div className="p-6 bg-gradient-to-r from-blue-400 to-purple-400 text-white">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-2xl font-bold text-purple-600">
+                      {userProfile?.display_name?.charAt(0).toUpperCase() || '👤'}
+                    </div>
+                    <div>
+                      <div className="font-bold text-lg">{userProfile?.display_name || 'Player'}</div>
+                      <div className="text-white/80 text-sm">{user?.email}</div>
+                    </div>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <div className="bg-white/20 rounded-lg p-2 text-center">
+                      <div className="text-2xl font-bold">{stats.totalGames}</div>
+                      <div className="text-xs text-white/90">Permainan</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-center">
+                      <div className="text-2xl font-bold">{stats.totalWins}</div>
+                      <div className="text-xs text-white/90">Kemenangan</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-center">
+                      <div className="text-2xl font-bold">{stats.winRate}%</div>
+                      <div className="text-xs text-white/90">Win Rate</div>
+                    </div>
+                    <div className="bg-white/20 rounded-lg p-2 text-center">
+                      <div className="text-2xl font-bold">{stats.bestScore}</div>
+                      <div className="text-xs text-white/90">Best Score</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 space-y-2">
+                  <button
+                    onClick={() => navigate('/edit-profile')}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-100 rounded-lg font-semibold text-slate-700 transition-colors"
+                  >
+                    ✏️ Edit Profil
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-3 hover:bg-red-50 rounded-lg font-semibold text-red-600 transition-colors border-t"
+                  >
+                    🚪 Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          
-          <h1 className="text-5xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent mb-3">
-            JOKER SCORE
-          </h1>
-          <p className="text-purple-200 text-lg font-semibold">Pencatat Skor Permainan Kartu</p>
-          <p className="text-purple-300 text-sm mt-2">Mainkan dengan strategi, menang dengan perhitungan</p>
+
+          {/* Settings Button */}
+          <button
+            onClick={() => navigate('/settings')}
+            className="w-12 h-12 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-xl hover:bg-white transition-all shadow-lg hover:shadow-xl transform hover:scale-110"
+            title="Settings"
+          >
+            ⚙️
+          </button>
         </div>
 
-        {/* Last Group Button */}
-        {lastGroupCode && (
+        {/* Main Title */}
+        <div className="text-center mb-12">
+          <div className="text-6xl mb-3 animate-bounce" style={{animationDuration: '2s'}}>🎮</div>
+          <h1 className="text-4xl font-black text-white mb-2">BOX CARD GAME</h1>
+          <p className="text-white/90 text-lg font-semibold">Mari bermain bersama!</p>
+        </div>
+
+        {/* MAIN MENU BUTTONS */}
+        <div className="space-y-4 mb-8">
+          {/* Box Tracker Button */}
           <button
-            onClick={handleContinueLastGroup}
-            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-5 px-6 rounded-xl mb-4 transition-all transform hover:scale-105 hover:-translate-y-1 shadow-2xl border border-purple-400/30"
+            onClick={() => navigate('/mygroups')}
+            className="w-full relative group overflow-hidden rounded-3xl p-6 transition-all transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl"
           >
-            <div className="text-sm opacity-90">↩️ Lanjutkan Grup</div>
-            <div className="text-2xl font-black tracking-wider">{lastGroupCode}</div>
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-teal-600 group-hover:from-emerald-500 group-hover:to-teal-700 transition-all"></div>
+            <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-all"></div>
+            <div className="relative z-10">
+              <div className="text-5xl mb-2">📊</div>
+              <div className="text-xl font-black text-white">BOX TRACKER</div>
+              <div className="text-white/90 text-sm mt-1">Kelola grup dan hitung poin</div>
+            </div>
           </button>
-        )}
 
-        {/* Create Group Button */}
-        <button
-          onClick={() => navigate('/create')}
-          className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-bold py-5 px-6 rounded-xl mb-3 transition-all transform hover:scale-105 hover:-translate-y-1 shadow-xl border border-blue-400/30 text-lg"
-        >
-          ✨ Buat Grup Baru
-        </button>
+          {/* Bermain Bersama Teman Button */}
+          <button
+            onClick={() => navigate('/multiplayer')}
+            className="w-full relative group overflow-hidden rounded-3xl p-6 transition-all transform hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-red-400 to-pink-600 group-hover:from-red-500 group-hover:to-pink-700 transition-all"></div>
+            <div className="absolute inset-0 bg-white/20 group-hover:bg-white/30 transition-all"></div>
+            <div className="relative z-10">
+              <div className="text-5xl mb-2">👥</div>
+              <div className="text-xl font-black text-white">BERMAIN BERSAMA</div>
+              <div className="text-white/90 text-sm mt-1">Mainkan bersama teman secara online</div>
+            </div>
+          </button>
+        </div>
 
-        {/* Join Group Button */}
-        <button
-          onClick={() => navigate('/join')}
-          className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-5 px-6 rounded-xl mb-3 transition-all transform hover:scale-105 hover:-translate-y-1 shadow-xl border border-emerald-400/30 text-lg"
-        >
-          👥 Gabung Grup
-        </button>
-
-        {/* Play Game Button (Fase 2) */}
-        <button
-          onClick={() => navigate('/play/setup')}
-          className="w-full bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-400 hover:to-pink-500 text-white font-bold py-5 px-6 rounded-xl mb-3 transition-all transform hover:scale-105 hover:-translate-y-1 shadow-xl border border-pink-400/30 text-lg"
-        >
-          🎮 Mulai Game
-        </button>
-
-        {/* My Groups Button */}
-        <button
-          onClick={() => navigate('/mygroups')}
-          className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold py-5 px-6 rounded-xl mb-3 transition-all transform hover:scale-105 hover:-translate-y-1 shadow-xl border border-amber-400/30 text-lg"
-        >
-          📂 Kelola Grup
-        </button>
-
-        {/* Rules Button */}
-        <button
-          onClick={() => navigate('/rules')}
-          className="w-full bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-105 hover:-translate-y-1 shadow-lg border border-slate-600/30"
-        >
-          📖 Aturan Permainan
-        </button>
-      </div>
-
-      {/* Footer */}
-      <div className="fixed bottom-4 text-center text-xs text-purple-300 w-full z-0">
-        <p className="font-semibold">🎴 Joker Score Tracker v1.0</p>
       </div>
     </div>
   );
 }
+

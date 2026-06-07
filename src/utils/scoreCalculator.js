@@ -71,3 +71,4 @@ export function calculateTotalScore(roundScores) {
     return sum + (round.round_total || 0);
   }, 0);
 }
+

@@ -25,3 +25,4 @@ export const SUN_FAILED_PENALTY = -50;
 export const CATE_BONUS = 50;
 export const JOKER_BONUS = 100; // per joker when CATE
 export const JOKER_PENALTY = 100; // per joker when not CATE
+

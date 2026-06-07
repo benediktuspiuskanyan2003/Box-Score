@@ -37,3 +37,4 @@ export function BottomNav({ groupCode }) {
     </nav>
   );
 }
+

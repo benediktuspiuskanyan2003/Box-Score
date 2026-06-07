@@ -103,3 +103,4 @@ export function JoinGroup() {
     </div>
   );
 }
+

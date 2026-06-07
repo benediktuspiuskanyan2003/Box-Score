@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useReducer } from 'react';
 import {
   initializeGame,
-  playCardToSun,
-  playNewSun,
+  playCardToSon,
+  playNewSon,
   playNewBox,
-  extendSun,
+  extendSon,
   addToBox,
   playerPass,
-  declareFailFirstSun,
+  declareFailFirstSon,
   nextRound,
   getRoundScores
 } from '../engine/gameEngine.js';
@@ -30,12 +30,12 @@ function gameReducer(state, action) {
     case 'INIT_GAME':
       return action.payload;
 
-    case 'PLAY_CARD_TO_SUN': {
-      const result = playCardToSun(
+    case 'PLAY_CARD_TO_SON': {
+      const result = playCardToSon(
         state,
         action.payload.playerIdx,
         action.payload.cardIdx,
-        action.payload.sunIdx,
+        action.payload.sonIdx,
         action.payload.position
       );
       if (result.success) {
@@ -44,8 +44,8 @@ function gameReducer(state, action) {
       return state;
     }
 
-    case 'PLAY_NEW_SUN': {
-      const result = playNewSun(state, action.payload.playerIdx, action.payload.cardIndices);
+    case 'PLAY_NEW_SON': {
+      const result = playNewSon(state, action.payload.playerIdx, action.payload.cardIndices);
       if (result.success) {
         return result.gameState;
       }
@@ -60,12 +60,12 @@ function gameReducer(state, action) {
       return state;
     }
 
-    case 'EXTEND_SUN': {
-      const result = extendSun(
+    case 'EXTEND_SON': {
+      const result = extendSon(
         state,
         action.payload.playerIdx,
         action.payload.cardIdx,
-        action.payload.sunIdx,
+        action.payload.sonIdx,
         action.payload.position
       );
       if (result.success) {
@@ -95,8 +95,8 @@ function gameReducer(state, action) {
       return state;
     }
 
-    case 'DECLARE_FAIL_FIRST_SUN': {
-      const result = declareFailFirstSun(state, action.payload.playerIdx);
+    case 'DECLARE_FAIL_FIRST_SON': {
+      const result = declareFailFirstSon(state, action.payload.playerIdx);
       
       if (!result.success) {
         return state; // Gagal, state tidak berubah
@@ -111,7 +111,7 @@ function gameReducer(state, action) {
         return freshState;
       }
       
-      // CONTINUE: Return updated state (pemain marked as sun_failed, turn ke next player)
+      // CONTINUE: Return updated state (pemain marked as son_failed, turn ke next player)
       return state;
     }
 
@@ -146,16 +146,16 @@ export function GameProvider({ children, initialPlayers = [], minusLimit = -300 
       });
     },
 
-    playCardToSun: (playerIdx, cardIdx, sunIdx, position = 'right') => {
+    playCardToSon: (playerIdx, cardIdx, sonIdx, position = 'right') => {
       dispatch({
-        type: 'PLAY_CARD_TO_SUN',
-        payload: { playerIdx, cardIdx, sunIdx, position }
+        type: 'PLAY_CARD_TO_SON',
+        payload: { playerIdx, cardIdx, sonIdx, position }
       });
     },
 
-    playNewSun: (playerIdx, cardIndices) => {
+    playNewSon: (playerIdx, cardIndices) => {
       dispatch({
-        type: 'PLAY_NEW_SUN',
+        type: 'PLAY_NEW_SON',
         payload: { playerIdx, cardIndices }
       });
     },
@@ -167,10 +167,10 @@ export function GameProvider({ children, initialPlayers = [], minusLimit = -300 
       });
     },
 
-    extendSun: (playerIdx, cardIdx, sunIdx, position = 'right') => {
+    extendSon: (playerIdx, cardIdx, sonIdx, position = 'right') => {
       dispatch({
-        type: 'EXTEND_SUN',
-        payload: { playerIdx, cardIdx, sunIdx, position }
+        type: 'EXTEND_SON',
+        payload: { playerIdx, cardIdx, sonIdx, position }
       });
     },
 
@@ -188,9 +188,9 @@ export function GameProvider({ children, initialPlayers = [], minusLimit = -300 
       });
     },
 
-    declareFailFirstSun: (playerIdx) => {
+    declareFailFirstSon: (playerIdx) => {
       dispatch({
-        type: 'DECLARE_FAIL_FIRST_SUN',
+        type: 'DECLARE_FAIL_FIRST_SON',
         payload: { playerIdx }
       });
     },
@@ -215,3 +215,4 @@ export function GameProvider({ children, initialPlayers = [], minusLimit = -300 
     </GameContext.Provider>
   );
 }
+

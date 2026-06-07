@@ -4,7 +4,7 @@ import { GameProvider, useGameContext } from '../context/GameContext';
 import { TurnIndicator } from '../components/GamePlay/TurnIndicator';
 import { CardHand } from '../components/GamePlay/CardHand';
 import { CardTable } from '../components/GamePlay/CardTable';
-import { getValidMoves, canExtendSunMultiple, isValidBox } from '../engine/cardValidator';
+import { getValidMoves, canExtendSonMultiple, isValidBox } from '../engine/cardValidator';
 
 /**
  * PlayGame - Halaman utama game
@@ -26,9 +26,9 @@ export function PlayGame() {
 function PlayGameContent({ setupData }) {
   const {
     gameState,
-    playNewSun,
+    playNewSon,
     playNewBox,
-    extendSun,
+    extendSon,
     addToBox,
     playerPass,
     declareFailFirstSun,
@@ -151,8 +151,8 @@ function PlayGameContent({ setupData }) {
       if (move.cardIdx !== undefined) {
         validCards.add(move.cardIdx);
       }
-      if (move.sunIdx !== undefined) {
-        validSuns.add(move.sunIdx);
+      if (move.sonIdx !== undefined) {
+        validSuns.add(move.sonIdx);
       }
       if (move.boxIdx !== undefined) {
         validBoxes.add(move.boxIdx);
@@ -177,8 +177,8 @@ function PlayGameContent({ setupData }) {
     currentPlayer.hand.forEach((card, cardIdx) => {
       if (!card.isJoker) {
         gameState.meja.suns.forEach(sun => {
-          if (canExtendSunMultiple(sun.cards, [card], 'left').valid ||
-              canExtendSunMultiple(sun.cards, [card], 'right').valid) {
+          if (canExtendSonMultiple(sun.cards, [card], 'left').valid ||
+              canExtendSonMultiple(sun.cards, [card], 'right').valid) {
             extendableSet.add(cardIdx);
           }
         });
@@ -203,11 +203,11 @@ function PlayGameContent({ setupData }) {
       const extendCards = selectedCards.map(idx => currentPlayer.hand[idx]);
       const extendable = new Set();
       
-      gameState.meja.suns.forEach((sun, sunIdx) => {
-        const leftValid = canExtendSunMultiple(sun.cards, extendCards, 'left').valid;
-        const rightValid = canExtendSunMultiple(sun.cards, extendCards, 'right').valid;
+      gameState.meja.suns.forEach((sun, sonIdx) => {
+        const leftValid = canExtendSonMultiple(sun.cards, extendCards, 'left').valid;
+        const rightValid = canExtendSonMultiple(sun.cards, extendCards, 'right').valid;
         if (leftValid || rightValid) {
-          extendable.add(sunIdx);
+          extendable.add(sonIdx);
         }
       });
       
@@ -253,7 +253,7 @@ function PlayGameContent({ setupData }) {
       alert('Butuh minimal 3 kartu untuk SUN');
       return;
     }
-    playNewSun(gameState.currentTurnIdx, selectedCards);
+    playNewSon(gameState.currentTurnIdx, selectedCards);
     setSelectedCards([]);
     setAction(null);
   };
@@ -271,13 +271,13 @@ function PlayGameContent({ setupData }) {
   };
 
   // Handle extend SUN
-  const handleExtendSun = (sunIdx, position) => {
+  const handleextendSon = (sonIdx, position) => {
     if (selectedCards.length < 1 || selectedCards.length > 2) {
       alert('Pilih 1-2 kartu untuk sambung ke SUN');
       return;
     }
-    // Pass array of cardIndices for extendSun
-    extendSun(gameState.currentTurnIdx, selectedCards, sunIdx, position);
+    // Pass array of cardIndices for extendSon
+    extendSon(gameState.currentTurnIdx, selectedCards, sonIdx, position);
     setSelectedCards([]);
     setAction(null);
     setTargetIndex(null);
@@ -351,12 +351,13 @@ function PlayGameContent({ setupData }) {
                         </div>
                       </div>
                       <div className="text-right">
+                        <div className="text-sm text-slate-400 mb-1">Total: <span className="text-white font-bold">{player.totalScore || 0}</span></div>
                         <div className="text-2xl font-bold" style={{
                           color: player.score > 0 ? '#4ade80' : '#f87171'
                         }}>
                           {player.score > 0 ? '+' : ''}{player.score}
                         </div>
-                        <div className="text-xs text-slate-400">poin</div>
+                        <div className="text-xs text-slate-400">ronde ini</div>
                       </div>
                     </div>
                   </div>
@@ -474,22 +475,22 @@ function PlayGameContent({ setupData }) {
           <div className="mb-4">
             <h4 className="text-yellow-300 text-sm font-semibold mb-2">🎴 SUN ({gameState.meja.suns.length})</h4>
             <div className="flex gap-3 flex-wrap">
-              {gameState.meja.suns.map((sun, sunIdx) => (
+              {gameState.meja.suns.map((sun, sonIdx) => (
                 <button
                   key={sun.id}
                   onClick={() => {
-                    if (action === 'extend' && targetIndex === sunIdx) {
+                    if (action === 'extend' && targetIndex === sonIdx) {
                       setAction(null);
                       setTargetIndex(null);
                     } else {
                       setAction('extend');
-                      setTargetIndex(sunIdx);
+                      setTargetIndex(sonIdx);
                     }
                   }}
                   className={`bg-slate-800 p-2 rounded border-2 transition-all ${
-                    action === 'extend' && targetIndex === sunIdx
+                    action === 'extend' && targetIndex === sonIdx
                       ? 'border-purple-400 bg-purple-900'
-                      : (action === 'extend' && selectedCards.length > 0 ? extendableSuns.includes(sunIdx) : validSunIndices.includes(sunIdx))
+                      : (action === 'extend' && selectedCards.length > 0 ? extendableSuns.includes(sonIdx) : validSunIndices.includes(sonIdx))
                       ? 'border-green-400 hover:border-green-300 shadow-lg shadow-green-500/50'
                       : 'border-yellow-500 hover:border-yellow-300'
                   }`}
@@ -528,13 +529,13 @@ function PlayGameContent({ setupData }) {
                 </p>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleExtendSun(targetIndex, 'left')}
+                    onClick={() => handleextendSon(targetIndex, 'left')}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-semibold text-sm"
                   >
                     ← Kiri
                   </button>
                   <button
-                    onClick={() => handleExtendSun(targetIndex, 'right')}
+                    onClick={() => handleextendSon(targetIndex, 'right')}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-semibold text-sm"
                   >
                     Kanan →
@@ -805,3 +806,4 @@ function PlayGameContent({ setupData }) {
     </div>
   );
 }
+
