@@ -16,21 +16,66 @@ import {
   checkFirstSon,
   checkCateTangan,
   canExtendSonMultiple,
-  getValidMoves
+  getValidMoves,
+  jokerHasValidUse
 } from './cardValidator.js';
+
+/**
+ * Helper: advance turn, skip non-active players
+ */
+function advanceTurn(gameState) {
+  let nextIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
+  let attempts = 0;
+  while (gameState.players[nextIdx].status !== 'active' && attempts < gameState.players.length) {
+    nextIdx = (nextIdx + 1) % gameState.players.length;
+    attempts++;
+  }
+  gameState.currentTurnIdx = nextIdx;
+}
 
 /**
  * Helper: Calculate remaining card score untuk pemain
  */
 function calculateRemainingScore(playerHand) {
   let minusTotal = 0;
-  
-  // Sum semua kartu sisa
   playerHand.forEach(card => {
     minusTotal += getMinusValue(card.rank);
   });
-  
-  return -minusTotal; // Return as negative (minus score)
+  return -minusTotal;
+}
+
+export function throwJoker(gameState, playerIdx, cardIdx) {
+  const player = gameState.players[playerIdx];
+  if (!player || player.status !== 'active') {
+    return { success: false, reason: 'Pemain tidak aktif' };
+  }
+  if (gameState.currentTurnIdx !== playerIdx) {
+    return { success: false, reason: 'Bukan giliran pemain ini' };
+  }
+
+  const card = player.hand[cardIdx];
+  if (!card) return { success: false, reason: 'Kartu tidak ditemukan' };
+  if (!card.isJoker) return { success: false, reason: 'Hanya Joker yang bisa dilempar' };
+
+  // ✅ Validasi: joker ini memang tidak bisa dipakai di mana pun
+  const canUse = jokerHasValidUse(cardIdx, player.hand, gameState.meja.sons, gameState.meja.boxes);
+  if (canUse) {
+    return { success: false, reason: 'Joker masih bisa digunakan, tidak bisa dilempar' };
+  }
+
+  // Buang joker ke "discard pile" atau cukup hilangkan dari tangan
+  player.hand.splice(cardIdx, 1);
+
+  gameState.history.push({
+    playerIdx,
+    action: 'throw_joker',
+    timestamp: Date.now()
+  });
+
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+
+  advanceTurn(gameState);
+  return { success: true, gameState };
 }
 
 /**
@@ -38,37 +83,26 @@ function calculateRemainingScore(playerHand) {
  */
 function hasValidMoves(gameState, playerIdx) {
   const player = gameState.players[playerIdx];
-  if (!player || player.status !== 'active') {
-    return false;
-  }
-  
-  const validMoves = getValidMoves(player.hand, gameState.meja.suns, gameState.meja.boxes);
+  if (!player || player.status !== 'active') return false;
+  const validMoves = getValidMoves(player.hand, gameState.meja.sons, gameState.meja.boxes);
   return validMoves.length > 0;
 }
 
 /**
  * Initialize game baru
- * @param {Array} players - [{id, name}, ...]
- * @param {number} minusLimit - Batas minus (-300, -400, dst)
  */
 export function initializeGame(players, minusLimit = -300) {
-  // Shuffle & deal
   const deck = createDeck();
   const shuffled = shuffleDeck(deck);
   const { playerCards, remaining } = dealCards(shuffled, players.length);
 
-  // Check Cate Tangan untuk setiap pemain
   const cateTanganPlayers = [];
   players.forEach((player, idx) => {
     if (checkCateTangan(playerCards[idx])) {
-      cateTanganPlayers.push({
-        playerId: player.id,
-        score: 50
-      });
+      cateTanganPlayers.push({ playerId: player.id, score: 50 });
     }
   });
 
-  // Initialize player hands & state
   const playerStates = players.map((player, idx) => ({
     id: player.id,
     name: player.name,
@@ -80,22 +114,19 @@ export function initializeGame(players, minusLimit = -300) {
 
   const gameState = {
     players: playerStates,
-    currentTurnIdx: 0, // Pemain pertama mulai (biasanya yang kocok)
+    currentTurnIdx: 0,
     round: 1,
-    phase: 'first_son', // first_son, play, check_cate
-    deck: remaining, // Kartu sisa yang tidak dibagikan
-    meja: {
-      sons: [], // [{id, cards, playerId}]
-      boxes: [] // [{id, cards, playerId}]
-    },
-    history: [], // [{playerIdx, action, timestamp}]
+    phase: 'first_son',
+    deck: remaining,
+    meja: { sons: [], boxes: [] },
+    history: [],
     minusLimit,
     gameOver: false,
-    cateType: null, // 'tangan', 'normal', 'none'
-    sonFirstCompleted: [] // Pemain yang sudah keluarkan Son pertama
+    cateType: null,
+    sonFirstCompleted: [],
+    noWinner: false  // ✅ TAMBAHAN: flag untuk ronde tanpa pemenang
   };
 
-  // Cek apakah ada Cate Tangan
   if (cateTanganPlayers.length > 0) {
     gameState.cateType = 'tangan';
     cateTanganPlayers.forEach(p => {
@@ -118,148 +149,132 @@ export function playCardToSon(gameState, playerIdx, cardIdx, sonIdx, position = 
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
   const card = player.hand[cardIdx];
-  if (!card) {
-    return { success: false, reason: 'Kartu tidak ditemukan' };
-  }
+  if (!card) return { success: false, reason: 'Kartu tidak ditemukan' };
 
   const son = gameState.meja.sons[sonIdx];
-  if (!son) {
-    return { success: false, reason: 'Son tidak ditemukan' };
-  }
+  if (!son) return { success: false, reason: 'Son tidak ditemukan' };
 
-  // Validasi: kartu bisa disambung ke Son
-  const testCards = position === 'left'
-    ? [card, ...son.cards]
-    : [...son.cards, card];
-
+  const testCards = position === 'left' ? [card, ...son.cards] : [...son.cards, card];
   if (!isValidSon(testCards).valid) {
     return { success: false, reason: 'Kartu tidak bisa disambung ke Son ini' };
   }
 
-  // Update Son
   if (position === 'left') {
     son.cards.unshift(card);
   } else {
     son.cards.push(card);
   }
 
-  // Remove kartu dari hand
   player.hand.splice(cardIdx, 1);
+  gameState.history.push({ playerIdx, action: 'play_to_son', sonIdx, position, timestamp: Date.now() });
 
-  // Record move
-  gameState.history.push({
-    playerIdx,
-    action: 'play_to_son',
-    sonIdx,
-    position,
-    timestamp: Date.now()
-  });
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
 
-  // Check CATE
-  if (player.hand.length === 0) {
-    return handleCate(gameState, playerIdx);
-  }
-
-  // Next turn
-  gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-
+  advanceTurn(gameState);
   return { success: true, gameState };
 }
 
 /**
  * Pemain buat Son baru
+ * @param {string} jokerPosition - 'auto' | 'kiri' | 'kanan' | 'gap'
  */
-export function playNewSon(gameState, playerIdx, cardIndices) {
+export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'auto') {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
-
-  // Enforce first SON phase: pemain harus belum membuat Son pertama
-  if (gameState.phase === 'first_son') {
-    if (gameState.sonFirstCompleted.includes(playerIdx)) {
-      return { success: false, reason: 'Anda sudah membuat SON pertama di ronde ini' };
-    }
+  if (gameState.phase === 'first_son' && gameState.sonFirstCompleted.includes(playerIdx)) {
+    return { success: false, reason: 'Anda sudah membuat SON pertama di ronde ini' };
   }
 
-  // Extract cards
   const cards = cardIndices.map(idx => player.hand[idx]).filter(c => c);
   if (cards.length < 3) {
     return { success: false, reason: 'Butuh minimal 3 kartu' };
   }
 
-  // Validasi
-  if (!isValidSon(cards).valid) {
+  // ✅ Blokir Joker di fase first_son
+  if (gameState.phase === 'first_son') {
+    if (cards.some(c => c.isJoker)) {
+      return { success: false, reason: 'Joker tidak boleh digunakan untuk Son Pertama' };
+    }
+  }
+
+  const validationResult = isValidSon(cards);
+  if (!validationResult.valid) {
     return { success: false, reason: 'Tidak membentuk Son yang valid' };
   }
 
-  // Di fase first_son, Son harus dari pemain yang turn-nya sekarang
+  const aPosition = validationResult.aPosition;
+
   if (gameState.phase === 'first_son') {
-    // OK, first son bisa dibuat
     gameState.sonFirstCompleted.push(playerIdx);
-    
-    // Cek apakah semua pemain sudah keluarkan Son pertama
     const needSon = gameState.players
       .map((p, idx) => idx)
       .filter(idx => gameState.players[idx].status === 'active');
-    
     if (gameState.sonFirstCompleted.length === needSon.length) {
       gameState.phase = 'play';
     }
   }
 
-  // Create Son - SORT KARTU ASCENDING & POSITION JOKER DI GAPS
-  // Separate jokers dan non-jokers
-  const nonJokers = cards.filter(c => !c.isJoker).sort((a, b) => {
-    const valA = getCardValue(a.rank);
-    const valB = getCardValue(b.rank);
+  // Pisahkan joker dan non-joker
+  const nonJokers = cards.filter(c => !c.isJoker);
+  const jokers = cards.filter(c => c.isJoker);
+
+  // Sort non-jokers dengan A=14 jika aPosition === 'akhir'
+  const sortedNonJokers = [...nonJokers].sort((a, b) => {
+    let valA = getCardValue(a.rank);
+    let valB = getCardValue(b.rank);
+    if (aPosition === 'akhir') {
+      if (a.rank === 'A') valA = 14;
+      if (b.rank === 'A') valB = 14;
+    }
     return valA - valB;
   });
-  
-  const jokers = cards.filter(c => c.isJoker);
-  
-  // Build son cards dengan Joker di gap jika ada
+
+  const getNumericalValue = (card) => {
+    const v = getCardValue(card.rank);
+    return (aPosition === 'akhir' && card.rank === 'A') ? 14 : v;
+  };
+
   let sortedCards = [];
-  
+
   if (jokers.length === 0) {
-    // No Joker, just append non-jokers
-    sortedCards = nonJokers;
+    sortedCards = sortedNonJokers;
   } else {
-    // Ada Joker - try to position di gaps
-    sortedCards = [...nonJokers];
-    
-    // Find gaps dan insert Jokers
-    for (let i = 0; i < jokers.length; i++) {
-      let inserted = false;
-      
-      // Try insert Joker di setiap gap
-      for (let j = 0; j < sortedCards.length - 1; j++) {
-        const valCurrent = getCardValue(sortedCards[j].rank);
-        const valNext = getCardValue(sortedCards[j + 1].rank);
-        
-        // Check if there's a gap (difference > 1)
-        if (valNext - valCurrent > 1) {
-          // Insert Joker di gap ini
-          sortedCards.splice(j + 1, 0, jokers[i]);
-          inserted = true;
-          break;
-        }
+    const minVal = getNumericalValue(sortedNonJokers[0]);
+    const maxVal = getNumericalValue(sortedNonJokers[sortedNonJokers.length - 1]);
+    const filledValues = new Set(sortedNonJokers.map(c => getNumericalValue(c)));
+
+    let jokerPool = [...jokers];
+    const builtCards = [];
+
+    // Isi range minVal..maxVal dulu (gap tengah)
+    for (let v = minVal; v <= maxVal; v++) {
+      if (filledValues.has(v)) {
+        builtCards.push(sortedNonJokers.find(c => getNumericalValue(c) === v));
+      } else if (jokerPool.length > 0) {
+        builtCards.push(jokerPool.shift());
       }
-      
-      // Jika tidak ada gap, append di akhir
-      if (!inserted) {
-        sortedCards.push(jokers[i]);
+    }
+
+    // Sisa joker setelah isi gap → posisikan sesuai jokerPosition
+    if (jokerPool.length > 0) {
+      if (jokerPosition === 'kiri') {
+        sortedCards = [...jokerPool, ...builtCards];
+      } else {
+        // Default / 'kanan' / 'auto': append ke kanan
+        sortedCards = [...builtCards, ...jokerPool];
       }
+    } else {
+      sortedCards = builtCards;
     }
   }
 
@@ -271,13 +286,11 @@ export function playNewSon(gameState, playerIdx, cardIndices) {
 
   gameState.meja.sons.push(newSon);
 
-  // Remove cards dari hand (reverse order agar index tidak berubah)
   const sortedIndices = [...cardIndices].sort((a, b) => b - a);
   for (const idx of sortedIndices) {
     player.hand.splice(idx, 1);
   }
 
-  // Record move
   gameState.history.push({
     playerIdx,
     action: 'new_son',
@@ -286,14 +299,9 @@ export function playNewSon(gameState, playerIdx, cardIndices) {
     timestamp: Date.now()
   });
 
-  // Check CATE
-  if (player.hand.length === 0) {
-    return handleCate(gameState, playerIdx);
-  }
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
 
-  // Next turn
-  gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-
+  advanceTurn(gameState);
   return { success: true, gameState };
 }
 
@@ -305,26 +313,38 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
-  // Extract cards
   const cards = cardIndices.map(idx => player.hand[idx]).filter(c => c);
-  
-  // Minimum cards validation - stricter di first_son phase
+  const nonJokerCard = cards.find(c => !c.isJoker);
+  if (nonJokerCard) {
+    const rankAlreadyInBox = gameState.meja.boxes.some(box =>
+      box.cards.some(c => !c.isJoker && c.rank === nonJokerCard.rank)
+    );
+    if (rankAlreadyInBox) {
+      return { 
+        success: false, 
+        reason: `Rank ${nonJokerCard.rank} sudah ada di BOX, tambahkan ke BOX yang ada (max 2 kartu)` 
+      };
+    }
+  }
   const minCards = gameState.phase === 'first_son' ? 5 : 3;
   if (cards.length < minCards) {
     return { success: false, reason: `Butuh minimal ${minCards} kartu untuk BOX` };
   }
 
-  // Validasi
+  if (gameState.phase === 'first_son') {
+    if (cards.some(c => c.isJoker)) {
+      return { success: false, reason: 'Joker tidak boleh digunakan untuk BOX Pertama' };
+    }
+  }
+  
   if (!isValidBox(cards, gameState.phase === 'first_son').valid) {
     return { success: false, reason: 'Tidak membentuk Box yang valid' };
   }
 
-  // Create Box
   const newBox = {
     id: `box_${Date.now()}`,
     cards,
@@ -333,13 +353,25 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
 
   gameState.meja.boxes.push(newBox);
 
-  // Remove cards dari hand
   const sortedIndices = [...cardIndices].sort((a, b) => b - a);
   for (const idx of sortedIndices) {
     player.hand.splice(idx, 1);
   }
 
-  // Record move
+  if (gameState.phase === 'first_son' && !gameState.sonFirstCompleted.includes(playerIdx)) {
+    gameState.sonFirstCompleted.push(playerIdx);
+
+    const activePlayers = gameState.players
+      .map((p, idx) => idx)
+      .filter(idx => gameState.players[idx].status === 'active');
+
+    const allDone = activePlayers.every(idx => gameState.sonFirstCompleted.includes(idx));
+
+    if (allDone) {
+      gameState.phase = 'play';
+    }
+  }
+
   gameState.history.push({
     playerIdx,
     action: 'new_box',
@@ -348,82 +380,52 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
     timestamp: Date.now()
   });
 
-  // Check CATE
-  if (player.hand.length === 0) {
-    return handleCate(gameState, playerIdx);
-  }
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
 
-  // Next turn
-  gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-
+  advanceTurn(gameState);
   return { success: true, gameState };
 }
 
 /**
- * Pemain extend SON yang sudah ada (sambung kartu)
- * @param {Object} gameState
- * @param {number} playerIdx
- * @param {number|Array} cardIdx atau cardIndices (1-2 kartu)
- * @param {number} sonIdx
- * @param {string} position 'left' atau 'right'
+ * Pemain extend SON yang sudah ada
  */
 export function extendSon(gameState, playerIdx, cardIdx, sonIdx, position = 'right') {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
   const son = gameState.meja.sons[sonIdx];
-  if (!son) {
-    return { success: false, reason: 'SON tidak ditemukan' };
-  }
+  if (!son) return { success: false, reason: 'SON tidak ditemukan' };
+  if (son.cards.length >= 13) return { success: false, reason: 'SON sudah penuh (13 kartu max)' };
 
-  // Check Son sudah penuh (13 kartu)
-  if (son.cards.length >= 13) {
-    return { success: false, reason: 'SON sudah penuh (13 kartu max)' };
-  }
-
-  // Handle both single card (cardIdx: number) and multiple cards (cardIdx: array)
   let cardIndices = Array.isArray(cardIdx) ? cardIdx : [cardIdx];
-  
-  // Get cards
   const cards = cardIndices.map(idx => player.hand[idx]).filter(c => c !== undefined);
-  if (cards.length === 0) {
-    return { success: false, reason: 'Kartu tidak ditemukan' };
-  }
 
-  if (cards.length > 2) {
-    return { success: false, reason: 'Extend hanya boleh 1-2 kartu' };
-  }
+  if (cards.length === 0) return { success: false, reason: 'Kartu tidak ditemukan' };
+  if (cards.length > 2) return { success: false, reason: 'Extend hanya boleh 1-2 kartu' };
 
-  // Validasi dengan strict rules
-  const validation = canExtendSonMultiple(son.cards, cards, position);
+  const validation = canExtendSonMultiple(son.cards, cards, position, gameState.meja.boxes);
   if (!validation.valid) {
     return { success: false, reason: validation.reason };
   }
 
-  // Update Son
   if (position === 'left') {
-    // Sort cards ascending sebelum prepend agar urutan benar (4-5-6-7-8-9, bukan 5-4-6-7-8-9)
     const sortedCards = [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
     son.cards = [...sortedCards, ...son.cards];
   } else {
-    // Extend ke kanan juga perlu sort ascending (agar konsisten)
     const sortedCards = [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
     son.cards = [...son.cards, ...sortedCards];
   }
 
-  // Remove kartu dari hand (sort descending agar index tidak berubah saat remove)
   const sortedIndices = [...cardIndices].sort((a, b) => b - a);
   for (const idx of sortedIndices) {
     player.hand.splice(idx, 1);
   }
 
-  // Record move
   gameState.history.push({
     playerIdx,
     action: 'extend_son',
@@ -433,94 +435,94 @@ export function extendSon(gameState, playerIdx, cardIdx, sonIdx, position = 'rig
     timestamp: Date.now()
   });
 
-  // Check CATE
-  if (player.hand.length === 0) {
-    return handleCate(gameState, playerIdx);
-  }
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
 
-  // Next turn
-  gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-
+  advanceTurn(gameState);
   return { success: true, gameState };
 }
 
 /**
  * Pemain add kartu ke BOX yang sudah ada
  */
-export function addToBox(gameState, playerIdx, cardIdx, boxIdx) {
+export function addToBox(gameState, playerIdx, cardIndices, boxIdx) {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
-  const card = player.hand[cardIdx];
-  if (!card) {
+  // ✅ Normalisasi: bisa single index atau array
+  const indices = Array.isArray(cardIndices) ? cardIndices : [cardIndices];
+  if (indices.length < 1 || indices.length > 2) {
+    return { success: false, reason: 'Hanya boleh menambah 1 atau 2 kartu ke BOX' };
+  }
+
+  const cards = indices.map(idx => player.hand[idx]).filter(c => c);
+  if (cards.length !== indices.length) {
     return { success: false, reason: 'Kartu tidak ditemukan' };
   }
 
   const box = gameState.meja.boxes[boxIdx];
-  if (!box) {
-    return { success: false, reason: 'BOX tidak ditemukan' };
+  if (!box) return { success: false, reason: 'BOX tidak ditemukan' };
+
+  // ✅ Cek kapasitas sebelum tambah
+  if (box.cards.length + cards.length > 8) {
+    return { success: false, reason: 'BOX akan melebihi batas maksimal 8 kartu' };
   }
 
-  // Validasi: kartu harus same rank atau joker
-  const boxRank = box.cards[0]?.rank;
-  if (card.rank !== boxRank && !card.isJoker) {
-    return { success: false, reason: `Kartu harus rank ${boxRank}` };
+  // ✅ Cari rank dari non-Joker pertama di box
+  const boxRank = box.cards.find(c => !c.isJoker)?.rank;
+  if (!boxRank) {
+    return { success: false, reason: 'BOX tidak memiliki kartu non-Joker' };
   }
 
-  // Max 8 kartu per BOX
-  if (box.cards.length >= 8) {
-    return { success: false, reason: 'BOX sudah penuh (8 kartu max)' };
+  // ✅ Validasi semua kartu yang akan ditambahkan
+  for (const card of cards) {
+    if (card.rank !== boxRank && !card.isJoker) {
+      return { success: false, reason: `Semua kartu harus rank ${boxRank}` };
+    }
   }
 
-  // Add kartu ke BOX
-  box.cards.push(card);
+  // ✅ Masukkan semua kartu ke box
+  cards.forEach(card => box.cards.push(card));
 
-  // Remove kartu dari hand
-  player.hand.splice(cardIdx, 1);
+  // ✅ Hapus dari tangan (dari index terbesar dulu agar index tidak geser)
+  const sortedIndices = [...indices].sort((a, b) => b - a);
+  for (const idx of sortedIndices) {
+    player.hand.splice(idx, 1);
+  }
 
-  // Record move
   gameState.history.push({
     playerIdx,
     action: 'add_to_box',
     boxIdx,
+    cardCount: cards.length,
     timestamp: Date.now()
   });
 
-  // Check CATE
-  if (player.hand.length === 0) {
-    return handleCate(gameState, playerIdx);
-  }
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
 
-  // Next turn
-  gameState.currentTurnIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-
+  advanceTurn(gameState);
   return { success: true, gameState };
 }
 
 /**
- * Pemain pass (tidak bisa main lagi di round ini)
- * Calculate sisa kartu mereka dan mark as 'passed'
+ * Pemain pass
+ * ✅ UPDATE: Deteksi semua pass tanpa ada CATE → set noWinner: true
  */
 export function playerPass(gameState, playerIdx) {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
-  // Calculate sisa kartu score
+  // Hitung skor sisa kartu SEKARANG, sebelum kartu di-reset
   player.score = calculateRemainingScore(player.hand);
-  
-  // Mark player sebagai passed (keluar dari round ini)
   player.status = 'passed';
 
   gameState.history.push({
@@ -530,33 +532,30 @@ export function playerPass(gameState, playerIdx) {
     timestamp: Date.now()
   });
 
-  // Check apakah semua pemain sudah pass atau cate
+  // Cek apakah masih ada pemain active
   const stillActive = gameState.players.filter(p => p.status === 'active').length;
-  
+
   if (stillActive === 0) {
-    // Semua pemain sudah pass → round end
-    // Calculate scores untuk semua pemain yang belum dihitung
+    // Pastikan semua pemain yang belum punya skor dihitung
     gameState.players.forEach(p => {
       if (p.status !== 'cate' && p.status !== 'cate_tangan' && p.score === 0) {
         p.score = calculateRemainingScore(p.hand);
       }
     });
+
+    // ✅ TAMBAHAN: Cek apakah ada pemenang CATE
+    const hasCateWinner = gameState.players.some(
+      p => p.status === 'cate' || p.status === 'cate_tangan'
+    );
+
+    // ✅ TAMBAHAN: Kalau tidak ada CATE → noWinner = true, tidak ada yang dapat +50
+    gameState.noWinner = !hasCateWinner;
     gameState.phase = 'round_end';
+
     return { success: true, gameState, roundEnd: true };
   }
 
-  // Next turn - skip pemain yang passed
-  let nextIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-  let attempts = 0;
-  const maxAttempts = gameState.players.length;
-  
-  while (gameState.players[nextIdx].status !== 'active' && attempts < maxAttempts) {
-    nextIdx = (nextIdx + 1) % gameState.players.length;
-    attempts++;
-  }
-
-  gameState.currentTurnIdx = nextIdx;
-
+  advanceTurn(gameState);
   return { success: true, gameState };
 }
 
@@ -565,91 +564,52 @@ export function playerPass(gameState, playerIdx) {
  */
 function handleCate(gameState, playerIdx) {
   const player = gameState.players[playerIdx];
-  
+
   player.status = 'cate';
   gameState.cateType = 'normal';
 
-  // Calculate CATE score: cek joker terakhir yang dipakai
-  let jokerBonus = 0;
-  
-  // Lihat history untuk find last card yang di-play (harus joker atau bukan)
-  const lastMove = gameState.history[gameState.history.length - 1];
-  
-  // Cek apakah ada joker di meja sekarang (dari Son atau Box terakhir)
-  const allTableCards = [
-    ...gameState.meja.sons.flatMap(s => s.cards),
-    ...gameState.meja.boxes.flatMap(b => b.cards)
-  ];
-  
-  // Count joker yang dimainkan oleh player yang CATE
-  const playerJokers = allTableCards.filter(c => c.isJoker).length;
-  // This is simplified - ideally track per player. For MVP, assume all jokers on table could be theirs
-  // Better: track in history which player played which card
-  
-  // For now: base CATE bonus + check last played card
-  let score = 50; // Base CATE bonus
-  
-  // TODO: Implement proper joker tracking per player
-  // Score += jokerBonus * 100 (jika ada joker di kartu terakhir)
-  
+  const jokerCount = player.hand.filter(c => c.isJoker).length;
+  const score = jokerCount > 0 ? jokerCount * 100 : 50;
   player.score = score;
 
-  // Hitung minus untuk pemain lain yang masih active
-  gameState.players.forEach((p, idx) => {
+  gameState.players.forEach((p) => {
     if (p.status === 'active') {
       let minusTotal = 0;
-      
-      // Sum semua kartu sisa
       p.hand.forEach(card => {
         minusTotal += getMinusValue(card.rank);
       });
-      
-      // Joker penalty: -100 per joker
       const jokerPenalty = p.hand.filter(c => c.isJoker).length * 100;
-      
       p.score = -(minusTotal + jokerPenalty);
     }
   });
 
   gameState.phase = 'round_end';
-
   return { success: true, gameState, roundEnd: true };
 }
 
 /**
  * Declare player gagal Son pertama
- * Rules:
- * - 4 pemain: 1 gagal → restart, 2+ gagal → restart
- * - 5 pemain: 1 gagal → lanjut (-50), 2+ gagal → restart
- * Return: {restart: boolean} - true jika perlu restart
  */
 export function declareFailFirstSon(gameState, playerIdx) {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
   }
-
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
 
-  // Hitung fail sebelum tambah (untuk determine logic)
   const prevFailCount = gameState.players.filter(p => p.status === 'son_failed').length;
   const playerCount = gameState.players.length;
 
-  // Tentukan apakah akan restart SEBELUM mutate state
   let willRestart = false;
   if (playerCount === 4) {
-    // 4 pemain: ANY fail → restart
     willRestart = true;
   } else if (playerCount === 5) {
-    // 5 pemain: 2+ fail → restart
     willRestart = (prevFailCount + 1) >= 2;
   }
 
   if (willRestart) {
-    // RESTART: jangan mutate apapun, langsung return restart signal
-    // State akan di-reset di reducer dengan initializeGame()
     gameState.history.push({
       playerIdx,
       action: 'declare_fail_son',
@@ -659,7 +619,6 @@ export function declareFailFirstSon(gameState, playerIdx) {
     });
     return { success: true, restart: true };
   } else {
-    // CONTINUE: mutate state - mark pemain gagal dengan poin -50
     player.status = 'son_failed';
     player.score = -50;
 
@@ -671,17 +630,7 @@ export function declareFailFirstSon(gameState, playerIdx) {
       timestamp: Date.now()
     });
 
-    // Skip pemain ini, lanjut ke next active player
-    let nextIdx = (gameState.currentTurnIdx + 1) % gameState.players.length;
-    let attempts = 0;
-    const maxAttempts = gameState.players.length;
-    
-    while (gameState.players[nextIdx].status !== 'active' && attempts < maxAttempts) {
-      nextIdx = (nextIdx + 1) % gameState.players.length;
-      attempts++;
-    }
-    
-    gameState.currentTurnIdx = nextIdx;
+    advanceTurn(gameState);
     return { success: true, restart: false, gameState };
   }
 }
@@ -690,63 +639,50 @@ export function declareFailFirstSon(gameState, playerIdx) {
  * Get round scores untuk save ke Supabase
  */
 export function getRoundScores(gameState, roundNumber) {
-  const scores = gameState.players.map(player => ({
+  return gameState.players.map(player => ({
     player_id: player.id,
     is_cate: player.status === 'cate',
     son_failed: player.status === 'son_failed',
     card_score: player.status === 'active' ? 0 : calculateCardScore(player.hand),
     round_total: player.score,
-    score_reset: false // TODO: Implement auto-reset logic
+    score_reset: false
   }));
-
-  return scores;
 }
 
-/**
- * Helper: calculate card score untuk pemain yang tidak CATE
- */
 function calculateCardScore(hand) {
   return hand.reduce((sum, card) => sum + getMinusValue(card.rank), 0);
 }
 
 /**
- * Next Round - Lanjut ke ronde berikutnya
- * Reset status, shuffle deck baru, deal kartu
+ * Next Round
+ * ✅ UPDATE: Reset noWinner flag saat mulai ronde baru
  */
 export function nextRound(gameState) {
   if (gameState.phase !== 'round_end') {
     return { success: false, reason: 'Game harus dalam phase round_end' };
   }
 
-  // STEP 1: Accumulate round scores ke totalScore sebelum reset
+  // Akumulasi score ke totalScore — berlaku untuk semua kasus termasuk noWinner
   gameState.players.forEach((player) => {
     if (!player.totalScore) player.totalScore = 0;
-    player.totalScore += player.score; // Add current round score
+    player.totalScore += player.score;
   });
 
-  // Shuffle & deal kartu baru
   const deck = createDeck();
   const shuffled = shuffleDeck(deck);
   const playerCount = gameState.players.length;
   const { playerCards, remaining } = dealCards(shuffled, playerCount);
 
-  // Check Cate Tangan untuk setiap pemain di ronde baru
   const cateTanganPlayers = [];
   gameState.players.forEach((player, idx) => {
     if (checkCateTangan(playerCards[idx])) {
-      cateTanganPlayers.push({
-        playerId: player.id,
-        score: 50
-      });
+      cateTanganPlayers.push({ playerId: player.id, score: 50 });
     }
   });
 
-  // Update pemain status dan hand untuk ronde baru
   gameState.players.forEach((player, idx) => {
     player.hand = playerCards[idx] || [];
-    player.score = 0; // Reset score untuk ronde ini
-    
-    // Set status berdasarkan Cate Tangan
+    player.score = 0;
     if (cateTanganPlayers.some(p => p.playerId === player.id)) {
       player.status = 'cate_tangan';
       player.score = 50;
@@ -755,30 +691,24 @@ export function nextRound(gameState) {
     }
   });
 
-  // STEP 2: Find pemain dengan TOTAL SCORE tertinggi untuk giliran pertama di ronde baru
   let highestScoreIdx = 0;
   let highestScore = gameState.players[0].totalScore;
-  
   gameState.players.forEach((player, idx) => {
     if (player.totalScore > highestScore) {
       highestScore = player.totalScore;
       highestScoreIdx = idx;
     }
   });
-  
-  // Reset state untuk ronde berikutnya
+
   gameState.round += 1;
-  gameState.currentTurnIdx = highestScoreIdx; // Pemain dengan total score tertinggi mulai ronde berikutnya
+  gameState.currentTurnIdx = highestScoreIdx;
   gameState.phase = 'first_son';
   gameState.deck = remaining;
-  gameState.meja = {
-    sons: [],
-    boxes: []
-  };
+  gameState.meja = { sons: [], boxes: [] };
   gameState.cateType = cateTanganPlayers.length > 0 ? 'tangan' : null;
   gameState.sonFirstCompleted = [];
-  gameState.history = []; // Clear history untuk ronde berikutnya (atau bisa dipreserve jika ingin record lengkap)
+  gameState.history = [];
+  gameState.noWinner = false;  // ✅ TAMBAHAN: reset flag noWinner
 
   return { success: true, gameState };
 }
-

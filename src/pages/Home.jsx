@@ -41,9 +41,17 @@ export function Home() {
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center gap-3 bg-white/90 backdrop-blur rounded-full p-2 pr-4 hover:bg-white transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
             >
-              <div className="w-12 h-12 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full flex items-center justify-center text-xl font-bold text-white border-2 border-white">
-                {userProfile?.display_name?.charAt(0).toUpperCase() || '👤'}
-              </div>
+              {userProfile?.profile_picture_url ? (
+                <img
+                  src={`${userProfile.profile_picture_url}?t=${Date.now()}`}
+                  alt={userProfile.display_name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-white"
+                />
+              ) : (
+                <div className="w-12 h-12 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full flex items-center justify-center text-xl font-bold text-white border-2 border-white">
+                  {userProfile?.display_name?.charAt(0).toUpperCase() || '👤'}
+                </div>
+              )}
               <div className="text-left">
                 <div className="text-xs text-slate-500 font-semibold">Welcome</div>
                 <div className="text-sm font-bold text-slate-800 truncate max-w-[80px]">{userProfile?.display_name || 'Player'}</div>
@@ -55,9 +63,17 @@ export function Home() {
               <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 w-72 animate-in fade-in slide-in-from-top-2">
                 <div className="p-6 bg-gradient-to-r from-blue-400 to-purple-400 text-white">
                   <div className="flex items-center gap-4 mb-4">
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-2xl font-bold text-purple-600">
-                      {userProfile?.display_name?.charAt(0).toUpperCase() || '👤'}
-                    </div>
+                    {userProfile?.profile_picture_url ? (
+                      <img
+                        src={`${userProfile.profile_picture_url}?t=${Date.now()}`}
+                        alt={userProfile.display_name}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-white"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full flex items-center justify-center text-xl font-bold text-white border-2 border-white">
+                        {userProfile?.display_name?.charAt(0).toUpperCase() || '👤'}
+                      </div>
+                    )}
                     <div>
                       <div className="font-bold text-lg">{userProfile?.display_name || 'Player'}</div>
                       <div className="text-white/80 text-sm">{user?.email}</div>

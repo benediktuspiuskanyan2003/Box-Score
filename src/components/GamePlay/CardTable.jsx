@@ -25,32 +25,32 @@ function PlayingCard({ card, size = 'small' }) {
 }
 
 /**
- * CardTable - Tampil Sun & Box di meja
+ * CardTable - Tampil Son & Box di meja
  */
 export function CardTable({ gameState, onextendSon, onAddToBox }) {
   if (!gameState) return null;
 
-  const { suns = [], boxes = [] } = gameState.meja;
+  const { sons = [], boxes = [] } = gameState.meja;
 
   return (
     <div className="bg-gradient-to-b from-green-900 to-green-800 p-4 rounded-lg min-h-64 border-2 border-green-600 overflow-x-auto">
       {/* Header */}
       <h3 className="text-white font-bold mb-4">Meja</h3>
 
-      {/* SUN */}
-      {suns.length > 0 && (
+      {/* SON */}
+      {sons.length > 0 && (
         <div className="mb-6">
-          <h4 className="text-yellow-300 text-sm font-semibold mb-2">SUN</h4>
+          <h4 className="text-yellow-300 text-sm font-semibold mb-2">SON</h4>
           <div className="flex gap-4 flex-wrap">
-            {suns.map((sun, sonIdx) => (
-              <div key={sun.id} className="bg-slate-900 p-3 rounded border-2 border-yellow-500">
+            {sons.map((son, sonIdx) => (
+              <div key={son.id} className="bg-slate-900 p-3 rounded border-2 border-yellow-500">
                 <div className="flex gap-1 mb-2">
-                  {sun.cards.map((card, cardIdx) => (
-                    <PlayingCard key={`${sun.id}-${cardIdx}`} card={card} size="small" />
+                  {son.cards.map((card, cardIdx) => (
+                    <PlayingCard key={`${son.id}-${cardIdx}`} card={card} size="small" />
                   ))}
                 </div>
                 <div className="text-xs text-gray-400">
-                  {sun.cards.length} kartu
+                  {son.cards.length} kartu
                 </div>
               </div>
             ))}
@@ -80,9 +80,9 @@ export function CardTable({ gameState, onextendSon, onAddToBox }) {
       )}
 
       {/* Empty State */}
-      {suns.length === 0 && boxes.length === 0 && (
+      {sons.length === 0 && boxes.length === 0 && (
         <div className="flex items-center justify-center h-32 text-gray-500">
-          Meja kosong - tunggu pemain membuat SUN
+          Meja kosong - tunggu pemain membuat SON
         </div>
       )}
     </div>

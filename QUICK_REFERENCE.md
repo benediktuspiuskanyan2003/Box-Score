@@ -118,13 +118,13 @@ npm run dev
 ### Scoring System
 - **CATE (Menang)**: +50 + 100 per joker
 - **Kalah**: -card_value - 100 per joker
-- **Sun Gagal**: -50
+- **Son Gagal**: -50
 - **Reset**: Auto reset jika ≤ minus limit
 
 ### Input Interface (3 Tabs)
 1. **CATE Tab**: Pilih pemain + joker count
 2. **Kartu Tab**: Tap kartu untuk setiap pemain
-3. **Sun Tab**: Mark pemain yang gagal Sun
+3. **Son Tab**: Mark pemain yang gagal Son
 
 ### Data Tracking
 - ✅ All rounds saved
@@ -174,7 +174,7 @@ games            - Game instance
 rounds           - Individual rounds
   ├─ id, game_id, round_number
 round_scores     - Per-player scores
-  ├─ id, round_id, player_id, is_cate, joker_used/held, sun_failed, card_score, round_total, score_reset
+  ├─ id, round_id, player_id, is_cate, joker_used/held, son_failed, card_score, round_total, score_reset
 ```
 
 ## 💡 Tips

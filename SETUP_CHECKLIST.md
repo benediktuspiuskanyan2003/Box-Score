@@ -77,7 +77,7 @@ Use this checklist to ensure everything is properly configured before using the 
 ### Test 3: Input Ronde
 - [ ] Tab 1 (CATE): Select Player1 as CATE, 0 joker
 - [ ] Tab 2 (Kartu): For Player2, tap: A, K, 5 (should be -30)
-- [ ] Tab 3 (Sun): No one failed Sun
+- [ ] Tab 3 (Son): No one failed Son
 - [ ] Preview shows scores
 - [ ] Click "Simpan Ronde"
 - [ ] Go back to Game page

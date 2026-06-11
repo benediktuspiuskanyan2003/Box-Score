@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 
 /**
- * Component untuk menandai pemain yang gagal Sun di awal ronde
+ * Component untuk menandai pemain yang gagal Son di awal ronde
  * - 1 pemain gagal: dapat -50, keluar dari ronde
  * - 2+ pemain gagal: ronde diulang (tidak disimpan)
  */
-export function SunFailSelector({
+export function SonFailSelector({
   players,
   onSelect,
   initialFailed = []
@@ -29,7 +29,7 @@ export function SunFailSelector({
 
   return (
     <div className="bg-white rounded-lg p-4 shadow-md">
-      <h3 className="font-bold text-lg mb-4">Yang Gagal Sun ☀️</h3>
+      <h3 className="font-bold text-lg mb-4">Yang Gagal Son ☀️</h3>
 
       <div className="space-y-2 mb-6">
         {players.map(player => (
@@ -57,8 +57,8 @@ export function SunFailSelector({
         }`}>
           <div className="font-semibold mb-2">
             {failedPlayerNames.length === 1 
-              ? '1 pemain gagal Sun'
-              : `${failedPlayerNames.length} pemain gagal Sun`}
+              ? '1 pemain gagal Son'
+              : `${failedPlayerNames.length} pemain gagal Son`}
           </div>
           <div className="text-sm mb-2">{failedPlayerNames.join(', ')}</div>
           
@@ -68,7 +68,7 @@ export function SunFailSelector({
             </div>
           ) : (
             <div className="text-sm text-red-700 font-semibold">
-              ⚠️ 2+ pemain gagal Sun → Ronde diulang (tidak disimpan)
+              ⚠️ 2+ pemain gagal Son → Ronde diulang (tidak disimpan)
             </div>
           )}
         </div>
@@ -76,7 +76,7 @@ export function SunFailSelector({
 
       {failedPlayerNames.length === 0 && (
         <div className="bg-gray-100 border-2 border-gray-300 rounded-lg p-4 text-center text-gray-600 text-sm">
-          Tandai pemain yang gagal Sun (jika ada)
+          Tandai pemain yang gagal Son (jika ada)
         </div>
       )}
     </div>

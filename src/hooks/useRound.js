@@ -41,7 +41,7 @@ export function useRound(gameId, groupId, players, minusLimit) {
         is_cate: playerRound.isCate || false,
         joker_used: playerRound.jokerUsed || 0,
         joker_held: playerRound.jokerHeld || 0,
-        sun_failed: playerRound.sunFailed || false,
+        son_failed: playerRound.sonFailed || false,
         card_score: playerRound.cardScore || 0,
         round_total: playerRound.roundTotal || 0,
         score_reset: playerRound.scoreReset || false
@@ -74,7 +74,7 @@ export function useRound(gameId, groupId, players, minusLimit) {
     catePlayerId,
     jokerUsedByCate,
     playerCardScores,
-    sunFailedPlayers
+    sonFailedPlayers
   ) => {
     setLoading(true);
     setError(null);
@@ -92,13 +92,13 @@ export function useRound(gameId, groupId, players, minusLimit) {
       players.forEach(player => {
         const cardScore = playerCardScores[player.id] || 0;
         const isCate = player.id === catePlayerId;
-        const sunFailed = sunFailedPlayers.includes(player.id);
+        const sonFailed = sonFailedPlayers.includes(player.id);
 
         const roundScore = calculateRoundScore({
           isCate,
           jokerUsed: isCate ? jokerUsedByCate : 0,
           jokerHeld: !isCate ? (playerCardScores[`${player.id}_jokers`] || 0) : 0,
-          sunFailed,
+          sonFailed,
           cardScore: isCate ? 0 : cardScore
         });
 
@@ -106,7 +106,7 @@ export function useRound(gameId, groupId, players, minusLimit) {
           isCate,
           jokerUsed: isCate ? jokerUsedByCate : 0,
           jokerHeld: !isCate ? (playerCardScores[`${player.id}_jokers`] || 0) : 0,
-          sunFailed,
+          sonFailed,
           cardScore: isCate ? 0 : cardScore,
           roundTotal: roundScore,
           scoreReset: false

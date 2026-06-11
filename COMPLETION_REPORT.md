@@ -57,7 +57,7 @@
    ├── PlayerRow.jsx           - Player row in scoreboard
    ├── CardCalculator.jsx      - Interactive card input
    ├── CateSelector.jsx        - Select CATE player
-   ├── SunFailSelector.jsx     - Mark Sun failures
+   ├── SonFailSelector.jsx     - Mark Son failures
    └── BottomNav.jsx           - Bottom navigation bar
 ```
 
@@ -98,15 +98,15 @@
 - Multi-tab input interface:
   - **CATE Tab**: Select pemain yang menang + jokers
   - **Kartu Tab**: Interactive card selection per player
-  - **Sun Tab**: Mark players yang gagal Sun
+  - **Son Tab**: Mark players yang gagal Son
 - Real-time score preview
 
 ### 3. Score Calculation
 - CATE: +50 + 100 per joker
 - Non-CATE: -card_value - 100 per joker
-- Sun Gagal: -50
+- Son Gagal: -50
 - Auto-reset jika ≤ minus limit
-- 2+ Sun Gagal = Ronde diulang
+- 2+ Son Gagal = Ronde diulang
 
 ### 4. Data Persistence
 - Supabase PostgreSQL backend
@@ -194,7 +194,7 @@ Project is production-ready and can be:
 - ✅ Intuitive tab-based input
 - ✅ Real-time score preview
 - ✅ Bottom navigation for mobile
-- ✅ Status indicators (CATE, Sun Failed, Reset)
+- ✅ Status indicators (CATE, Son Failed, Reset)
 
 ## 🔐 Security Features
 
@@ -242,7 +242,7 @@ All requirements dari project specification sudah diimplementasikan:
 - ✅ Routing untuk 9 halaman
 - ✅ Score calculation logic
 - ✅ Reset score otomatis
-- ✅ Sun failure handling
+- ✅ Son failure handling
 - ✅ CATE logic
 - ✅ Card calculator
 - ✅ Multi-device support

@@ -157,14 +157,35 @@ const signup = async (email, password, displayName) => {
     }
   };
 
+  // Refresh profile (fetch latest data from DB)
+  const refreshProfile = async () => {
+    if (!user) return;
+    try {
+      const { data: profile, error: err } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_id', user.id)
+        .single();
+      
+      if (err) {
+        console.error('Error refreshing profile:', err);
+      } else if (profile) {
+        setUserProfile(profile);
+      }
+    } catch (err) {
+      console.error('Refresh profile error:', err);
+    }
+  };
+
   const value = {
     user,
     userProfile,
     loading,
     error,
-    signup,   // ✅ sekarang terdefinisi
+    signup,
     login,
     logout,
+    refreshProfile,
     isAuthenticated: !!user
   };
 

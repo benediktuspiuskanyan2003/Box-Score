@@ -76,7 +76,7 @@ src/
 │   ├── PlayerRow.jsx
 │   ├── CardCalculator.jsx
 │   ├── CateSelector.jsx
-│   ├── SunFailSelector.jsx
+│   ├── SonFailSelector.jsx
 │   ├── ScoreBadge.jsx
 │   └── BottomNav.jsx
 ├── hooks/              # Custom React hooks
@@ -114,7 +114,7 @@ src/
 1. Di halaman Game → **Input Ronde Baru**
 2. **Tab 1 - CATE**: Pilih siapa yang menang (CATE) + jumlah joker
 3. **Tab 2 - Kartu**: Untuk setiap pemain yang tidak CATE, tap kartu sisa mereka
-4. **Tab 3 - Sun**: Tandai pemain yang gagal Sun (jika ada)
+4. **Tab 3 - Son**: Tandai pemain yang gagal Son (jika ada)
 5. **Simpan Ronde** → Skor dihitung otomatis
 
 ## 📊 Sistem Penilaian
@@ -127,9 +127,9 @@ src/
 - Minus nilai kartu sisa (A=15, 2-9=sesuai, 10/J/Q/K=10, JOKER=100)
 - `-100` per joker yang dipegang
 
-### Jika Gagal Sun:
+### Jika Gagal Son:
 - `-50` poin (keluar dari ronde)
-- Jika 2+ pemain gagal Sun → ronde diulang
+- Jika 2+ pemain gagal Son → ronde diulang
 
 ## 🔄 Reset Skor Otomatis
 

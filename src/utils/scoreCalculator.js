@@ -1,4 +1,4 @@
-import { SUN_FAILED_PENALTY, CATE_BONUS, JOKER_BONUS, JOKER_PENALTY } from './constants.js';
+import { SON_FAILED_PENALTY, CATE_BONUS, JOKER_BONUS, JOKER_PENALTY } from './constants.js';
 
 /**
  * Calculate the score for a player in a round
@@ -6,7 +6,7 @@ import { SUN_FAILED_PENALTY, CATE_BONUS, JOKER_BONUS, JOKER_PENALTY } from './co
  * @param {boolean} roundData.isCate - Whether the player is CATE (won the round)
  * @param {number} roundData.jokerUsed - Number of jokers used when CATE
  * @param {number} roundData.jokerHeld - Number of jokers held when not CATE
- * @param {boolean} roundData.sunFailed - Whether player failed Sun at the beginning
+ * @param {boolean} roundData.sonFailed - Whether player failed Son at the beginning
  * @param {number} roundData.cardScore - Total minus value from remaining cards
  * @returns {number} - Total round score (can be positive or negative)
  */
@@ -14,12 +14,12 @@ export function calculateRoundScore({
   isCate,
   jokerUsed = 0,
   jokerHeld = 0,
-  sunFailed = false,
+  sonFailed = false,
   cardScore = 0
 }) {
-  // Sun failed penalty overrides everything
-  if (sunFailed) {
-    return SUN_FAILED_PENALTY;
+  // Son failed penalty overrides everything
+  if (sonFailed) {
+    return SON_FAILED_PENALTY;
   }
 
   let score = 0;

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 export function EditProfile() {
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, refreshProfile } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [profilePictureUrl, setProfilePictureUrl] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
@@ -76,7 +76,9 @@ export function EditProfile() {
         .from('profile-pictures')
         .getPublicUrl(filePath);
 
-      setProfilePictureUrl(publicUrlData.publicUrl);
+      // Add cache-busting timestamp so browser doesn't use old cached version
+      const urlWithCacheBust = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+      setProfilePictureUrl(urlWithCacheBust);
       toast.success('Foto berhasil diupload');
     } catch (err) {
       console.error('Upload error:', err);
@@ -110,6 +112,9 @@ export function EditProfile() {
         .eq('auth_id', user.id);
 
       if (error) throw error;
+
+      // Refresh profile in context so all components get latest data
+      await refreshProfile();
 
       toast.success('Profil berhasil disimpan!');
       setTimeout(() => navigate('/home'), 1500);

@@ -123,7 +123,7 @@ Output kurang lebih:
 2. Follow 3 tabs:
    - **Tab 1 (CATE)**: Siapa yang menang?
    - **Tab 2 (Kartu)**: Tap kartu sisa untuk setiap pemain
-   - **Tab 3 (Sun)**: Ada yang gagal Sun?
+   - **Tab 3 (Son)**: Ada yang gagal Son?
 3. **Simpan Ronde** → Skor dihitung otomatis
 4. Semua device akan update otomatis (refresh halaman jika perlu)
 

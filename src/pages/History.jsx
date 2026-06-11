@@ -116,7 +116,7 @@ export function History() {
                   <div className="space-y-2">
                     {round.scores.map((score) => {
                       const player = players.find(p => p.id === score.player_id);
-                      const statusIcon = score.sun_failed
+                      const statusIcon = score.son_failed
                         ? '☀️'
                         : score.is_cate
                         ? '🏆'

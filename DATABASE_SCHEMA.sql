@@ -43,7 +43,7 @@ CREATE TABLE round_scores (
   is_cate BOOLEAN DEFAULT FALSE,
   joker_used INT DEFAULT 0,
   joker_held INT DEFAULT 0,
-  sun_failed BOOLEAN DEFAULT FALSE,
+  son_failed BOOLEAN DEFAULT FALSE,
   card_score INT DEFAULT 0,
   round_total INT NOT NULL,
   score_reset BOOLEAN DEFAULT FALSE

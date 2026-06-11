@@ -7,7 +7,7 @@ export function TurnIndicator({ gameState }) {
   if (!gameState) return null;
 
   const currentPlayer = gameState.players[gameState.currentTurnIdx];
-  const phase = gameState.phase === 'first_sun' ? 'Sun Pertama' : 'Main';
+  const phase = gameState.phase === 'first_son' ? 'Son Pertama' : 'Main';
 
   return (
     <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-4 rounded-lg mb-4">

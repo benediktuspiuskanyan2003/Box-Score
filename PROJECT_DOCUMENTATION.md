@@ -30,28 +30,28 @@
 
 ### Card Combinations
 
-**SUN (Sequence of consecutive same suit):**
+**SON (Sequence of consecutive same suit):**
 - Minimum: 3 cards same suit in sequence (e.g., ♠3-4-5)
 - Maximum: 13 cards (3 through A)
 - Joker: Can fill gaps in sequence
-- Usage: Create new SUN or extend existing SUN
+- Usage: Create new SON or extend existing SON
 
 **BOX (Set of same rank):**
 - Minimum: 3 same rank cards (e.g., 3 Kings)
-- First SUN phase: Minimum 5 cards required
+- First SON phase: Minimum 5 cards required
 - Play phase: Minimum 3 cards required
 - Usage: Create new BOX or add cards to existing BOX
 
 ### Game Phases
 
-**Phase 1: First SUN (first_sun)**
-- EVERY player MUST create at least one SUN
-- Cannot move to play phase until all active players have SUN
+**Phase 1: First SON (first_son)**
+- EVERY player MUST create at least one SON
+- Cannot move to play phase until all active players have SON
 - BOX creation requires 5+ cards (minimum)
-- If player can't make SUN → "Gagal Sun" (declare fail)
+- If player can't make SON → "Gagal Son" (declare fail)
 
 **Phase 2: Main Play (play)**
-- Players can create/extend SUN or create/add to BOX
+- Players can create/extend SON or create/add to BOX
 - Or pass turn to next player
 - BOX creation requires 3+ cards (minimum)
 
@@ -75,12 +75,12 @@
 - Scores calculated for all remaining players
 - Scores added to cumulative totalScore
 
-**Gagal Sun Rules (4 Players):**
+**Gagal Son Rules (4 Players):**
 - Any player declares fail → Round RESTARTS
 - Failed player gets: 0 points (no penalty)
 - All cards reshuffled and redealt
 
-**Gagal Sun Rules (5 Players):**
+**Gagal Son Rules (5 Players):**
 - 1 player fails → Game CONTINUES, failed player: -50 points
 - 2+ players fail → Round RESTARTS, all failed: 0 points
 
@@ -116,7 +116,7 @@ BoxPoints/
 │   ├── components/
 │   │   └── GamePlay/
 │   │       ├── CardHand.jsx         # Player's hand display
-│   │       ├── CardTable.jsx        # Table cards (SUN/BOX)
+│   │       ├── CardTable.jsx        # Table cards (SON/BOX)
 │   │       └── TurnIndicator.jsx    # Current player info
 │   │
 │   ├── context/
@@ -155,23 +155,23 @@ BoxPoints/
       hand: Card[],           // Player's current cards
       score: number,          // Round score
       totalScore: number,     // Cumulative score
-      status: 'active' | 'passed' | 'cate' | 'cate_tangan' | 'sun_failed'
+      status: 'active' | 'passed' | 'cate' | 'cate_tangan' | 'son_failed'
     }
   ],
   
   currentTurnIdx: number,     // Index of current player
   round: number,              // Current round (1, 2, 3...)
-  phase: 'first_sun' | 'play' | 'round_end',
+  phase: 'first_son' | 'play' | 'round_end',
   
   meja: {                      // Table state
-    suns: [{ id, cards, playerId }],    // SUN sequences
+    sons: [{ id, cards, playerId }],    // SON sequences
     boxes: [{ id, cards, playerId }]    // BOX sets
   },
   
   deck: Card[],               // Remaining undealt cards
   history: Move[],            // Game action history
   minusLimit: number,         // Max negative score allowed (-300, -400, etc)
-  sunFirstCompleted: number[],// Player indices who completed first SUN
+  sonFirstCompleted: number[],// Player indices who completed first SON
   cateType: null | 'tangan' | 'normal',
   gameOver: boolean
 }
@@ -200,8 +200,8 @@ BoxPoints/
 - Checks for CATE Tangan
 - Returns initial gameState
 
-**`playNewSun(gameState, playerIdx, cardIndices)`**
-- Player creates new SUN
+**`playNewSon(gameState, playerIdx, cardIndices)`**
+- Player creates new SON
 - Validates 3+ consecutive same suit
 - Positions Jokers in gaps (if any)
 - Checks if player achieved CATE
@@ -209,13 +209,13 @@ BoxPoints/
 
 **`playNewBox(gameState, playerIdx, cardIndices)`**
 - Player creates new BOX
-- Validates 3+ (or 5+ in first_sun) same rank
+- Validates 3+ (or 5+ in first_son) same rank
 - Removes duplicates automatically
 - Checks CATE condition
 - Auto-advances turn
 
-**`extendSun(gameState, playerIdx, cardIndices, sunIdx, position)`**
-- Extends existing SUN left or right
+**`extendSon(gameState, playerIdx, cardIndices, sonIdx, position)`**
+- Extends existing SON left or right
 - Validates cards extend sequence correctly
 - Position can be 'left' or 'right'
 - Handles Joker validation
@@ -235,9 +235,9 @@ BoxPoints/
 - Auto-advances to next active player
 - Detects if round ended (all passed)
 
-**`declareFailFirstSun(gameState, playerIdx)`**
-- Player declares cannot make SUN (first_sun phase only)
-- Marks as 'sun_failed'
+**`declareFailFirstSon(gameState, playerIdx)`**
+- Player declares cannot make SON (first_son phase only)
+- Marks as 'son_failed'
 - Determines if round restarts (based on player count + fail count)
 - Returns restart flag for UI handling
 
@@ -246,12 +246,12 @@ BoxPoints/
 - Finds player with highest totalScore
 - That player becomes currentTurnIdx (starts next round)
 - New deck created and dealt
-- Phase reset to 'first_sun'
+- Phase reset to 'first_son'
 - Returns new gameState
 
 ### File: `cardValidator.js`
 
-**`isValidSun(cards)`**
+**`isValidSon(cards)`**
 - Validates 3+ consecutive same suit
 - Handles Joker as wildcard
 - Returns `{ valid: boolean, reason: string }`
@@ -261,15 +261,15 @@ BoxPoints/
 - Rejects duplicate ranks
 - Returns `{ valid: boolean, reason: string }`
 
-**`canExtendSunMultiple(sunCards, extendCards, position)`**
-- Checks if extendCards extend existing SUN
+**`canExtendSonMultiple(sonCards, extendCards, position)`**
+- Checks if extendCards extend existing SON
 - Position: 'left' or 'right'
 - Validates against Joker conflicts
 - Returns `{ valid: boolean }`
 
-**`getValidMoves(hand, suns, boxes)`**
+**`getValidMoves(hand, sons, boxes)`**
 - Returns all possible moves for current hand
-- Includes: create SUN, create BOX, extend SUN, add to BOX
+- Includes: create SON, create BOX, extend SON, add to BOX
 - Used for visual highlighting in UI
 
 **`checkCateTangan(hand)`**
@@ -287,23 +287,23 @@ BoxPoints/
 2. INIT GAME (initializeGame)
    └─→ Deck shuffled, cards dealt
    └─→ Check CATE Tangan for each player
-   └─→ Phase: first_sun, currentTurnIdx: 0
+   └─→ Phase: first_son, currentTurnIdx: 0
    
-3. FIRST SUN PHASE (phase === 'first_sun')
-   ├─→ Current player MUST create SUN (3+ consecutive same suit)
-   ├─→ OR declare "Gagal Sun" (fail)
+3. FIRST SON PHASE (phase === 'first_son')
+   ├─→ Current player MUST create SON (3+ consecutive same suit)
+   ├─→ OR declare "Gagal Son" (fail)
    ├─→ If fail: check player count
    │   ├─ 4 players: ANY fail → restart round
    │   └─ 5 players: 1 fail → -50 poin + continue
    │                 2+ fail → restart round
-   ├─→ After player makes SUN, turn advances to next player
-   ├─→ When ALL active players made SUN → Phase: play
+   ├─→ After player makes SON, turn advances to next player
+   ├─→ When ALL active players made SON → Phase: play
    
 4. PLAY PHASE (phase === 'play')
    ├─→ Current player can:
-   │   ├─ Create SUN (3+)
+   │   ├─ Create SoN (3+)
    │   ├─ Create BOX (3+)
-   │   ├─ Extend existing SUN
+   │   ├─ Extend existing SON
    │   ├─ Add to existing BOX
    │   └─ PASS (if can't play)
    │
@@ -333,7 +333,7 @@ BoxPoints/
    │   ├─ Finds player with highest totalScore
    │   ├─ Sets that player as currentTurnIdx
    │   ├─ New deck dealt
-   │   ├─ Phase: first_sun
+   │   ├─ Phase: first_son
    │   └─ Back to step 3
    │
    └─→ Button "Kembali ke Lobby"
@@ -348,12 +348,12 @@ BoxPoints/
 - **Header:** Round number, current phase, active player count
 - **Turn Indicator:** Shows whose turn it is
 - **Player Status:** All players with status badges (Active, Passed, CATE, etc)
-- **Card Table:** Displays all SUN and BOX on table
+- **Card Table:** Displays all SON and BOX on table
 - **Card Hand:** Current player's hand with visual highlights
-- **Action Buttons:** SUN, BOX, Pass, Gagal Sun (first_sun only)
+- **Action Buttons:** SON, BOX, Pass, Gagal Son (first_son only)
 
 ### Visual Indicators (Tailwind)
-- **Green glow:** Valid moves (canExtendSunMultiple)
+- **Green glow:** Valid moves (canExtendSonMultiple)
 - **Purple glow:** Selected cards
 - **Purple scale:** Current player in status indicator
 - **Red border:** Passed status
@@ -375,19 +375,19 @@ BoxPoints/
 ### ✅ FIXED Issues
 
 1. **Joker Extend Validation** ✅
-   - Issue: Couldn't extend SUN after Joker-filled position
-   - Fix: Modified canExtendSunMultiple() to use flexible validation
+   - Issue: Couldn't extend SON after Joker-filled position
+   - Fix: Modified canExtendSonMultiple() to use flexible validation
 
 2. **Joker Positioning** ✅
    - Issue: Jokers appended to end instead of filling gaps
-   - Fix: playNewSun() uses gap-detection algorithm
+   - Fix: playNewSon() uses gap-detection algorithm
 
-3. **Gagal Sun -0 Poin Logic** ✅
+3. **Gagal Son -0 Poin Logic** ✅
    - Issue: Always gave -50 poin regardless of restart
    - Fix: Only set score -50 if !willRestart
 
 4. **Duplicate Card Validation** ✅
-   - Issue: isValidSun() used Set to remove duplicates
+   - Issue: isValidSon() used Set to remove duplicates
    - Fix: Properly validates no duplicate ranks
 
 5. **Pass Auto-Advance** ✅
@@ -400,12 +400,12 @@ BoxPoints/
 
 ### 🟡 Current Features
 - ✅ 4-5 player game setup
-- ✅ First SUN phase enforcement
+- ✅ First SON phase enforcement
 - ✅ Play phase with create/extend/add moves
 - ✅ Pass functionality with auto-advance
 - ✅ CATE detection and scoring
 - ✅ CATE Tangan detection at game start
-- ✅ Gagal Sun handling (4p and 5p variants)
+- ✅ Gagal Son handling (4p and 5p variants)
 - ✅ Round end screen
 - ✅ Next round with highest score starting
 - ✅ Total score tracking
@@ -451,8 +451,8 @@ npm run build
 ### Testing
 - Manual testing via dev server
 - Test scenarios:
-  - 4 player game with Gagal Sun
-  - 5 player game with mixed Gagal Sun
+  - 4 player game with Gagal Son
+  - 5 player game with mixed Gagal Son
   - Pass flow between players
   - Round end and next round
 
@@ -469,9 +469,9 @@ npm run build
 | Joker | 100 |
 
 ### Phase Requirements
-| Phase | Min SUN | Min BOX | Joker | Status |
+| Phase | Min SON | Min BOX | Joker | Status |
 |-------|---------|---------|--------|--------|
-| first_sun | 3+ consecutive | 5+ same rank | Fills gaps | All must make |
+| first_son | 3+ consecutive | 5+ same rank | Fills gaps | All must make |
 | play | 3+ consecutive | 3+ same rank | Fills gaps | Optional |
 | round_end | - | - | - | Display scores |
 
@@ -482,7 +482,7 @@ npm run build
 | passed | Passed current round | Skipped |
 | cate | Won (empty hand) | Round ends |
 | cate_tangan | Won at game start | Round ends |
-| sun_failed | Declared can't make SUN | Restart/continue |
+| son_failed | Declared can't make SON | Restart/continue |
 
 ---
 
@@ -503,13 +503,13 @@ npm run build
 - **Update UI:** Edit PlayGame.jsx component
 
 ### Testing Checklist
-- [ ] Can create SUN with 3+ cards
+- [ ] Can create SON with 3+ cards
 - [ ] Can create BOX with minimum cards
-- [ ] Can extend SUN both left and right
+- [ ] Can extend SON both left and right
 - [ ] Can add to BOX
 - [ ] Pass works and skips to next player
 - [ ] CATE detection works
-- [ ] Gagal Sun logic works (4p and 5p)
+- [ ] Gagal Son logic works (4p and 5p)
 - [ ] Round ends when all pass
 - [ ] Next round starts with highest score player
 - [ ] Scores accumulate to totalScore

@@ -5,7 +5,7 @@ import { useGame } from '../hooks/useGame';
 import { useRound } from '../hooks/useRound';
 import { CateSelector } from '../components/CateSelector';
 import { CardCalculator } from '../components/CardCalculator';
-import { SunFailSelector } from '../components/SunFailSelector';
+import { SonFailSelector } from '../components/SonFailSelector';
 import { PlayerRow } from '../components/PlayerRow';
 import { calculateRoundScore } from '../utils/scoreCalculator';
 
@@ -23,7 +23,7 @@ export function RoundInput() {
   const [catePlayerId, setCatePlayerId] = useState(null);
   const [jokerUsedByCate, setJokerUsedByCate] = useState(0);
   const [playerCardScores, setPlayerCardScores] = useState({});
-  const [sunFailedPlayers, setSunFailedPlayers] = useState([]);
+  const [sonFailedPlayers, setSonFailedPlayers] = useState([]);
   const [preview, setPreview] = useState({});
   const [currentCardPlayerIndex, setCurrentCardPlayerIndex] = useState(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -53,20 +53,20 @@ export function RoundInput() {
       const cardScore = playerCardScores[player.id] || 0;
       const jokerHeld = playerCardScores[`${player.id}_jokers`] || 0;
       const isCate = player.id === catePlayerId;
-      const sunFailed = sunFailedPlayers.includes(player.id);
+      const sonFailed = sonFailedPlayers.includes(player.id);
 
       const score = calculateRoundScore({
         isCate,
         jokerUsed: isCate ? jokerUsedByCate : 0,
         jokerHeld: !isCate ? jokerHeld : 0,
-        sunFailed,
+        sonFailed,
         cardScore: isCate ? 0 : cardScore
       });
 
-      newPreview[player.id] = { score, isCate, sunFailed };
+      newPreview[player.id] = { score, isCate, sonFailed };
     });
     setPreview(newPreview);
-  }, [catePlayerId, jokerUsedByCate, playerCardScores, sunFailedPlayers, players]);
+  }, [catePlayerId, jokerUsedByCate, playerCardScores, sonFailedPlayers, players]);
 
   // Get list pemain yang perlu input kartu
   const playersNeedingCardInput = catePlayerId === null ? players : players.filter(p => p.id !== catePlayerId);
@@ -79,11 +79,11 @@ export function RoundInput() {
       [`${currentCardPlayer.id}_jokers`]: cardData.jokers // Store joker count separately
     }));
 
-    // Pindah ke pemain berikutnya atau ke Sun tab
+    // Pindah ke pemain berikutnya atau ke Son tab
     if (currentCardPlayerIndex < playersNeedingCardInput.length - 1) {
       setCurrentCardPlayerIndex(currentCardPlayerIndex + 1);
     } else {
-      setActiveTab('sun');
+      setActiveTab('son');
     }
   };
 
@@ -93,10 +93,10 @@ export function RoundInput() {
   };
 
   const handleSubmitRound = async () => {
-    // Check if 2+ players failed Sun
-    if (sunFailedPlayers.length >= 2) {
-      alert('⚠️ 2+ pemain gagal Sun → Ronde diulang, tidak disimpan');
-      setSunFailedPlayers([]);
+    // Check if 2+ players failed Son
+    if (sonFailedPlayers.length >= 2) {
+      alert('⚠️ 2+ pemain gagal Son → Ronde diulang, tidak disimpan');
+      setSonFailedPlayers([]);
       return;
     }
 
@@ -106,7 +106,7 @@ export function RoundInput() {
         catePlayerId,
         jokerUsedByCate,
         playerCardScores,
-        sunFailedPlayers
+        sonFailedPlayers
       );
 
       if (!result) {
@@ -118,7 +118,7 @@ export function RoundInput() {
       setCatePlayerId(null);
       setJokerUsedByCate(0);
       setPlayerCardScores({});
-      setSunFailedPlayers([]);
+      setSonFailedPlayers([]);
       setCurrentCardPlayerIndex(0);
 
       // Wait a bit for database to sync, then go back to game
@@ -178,14 +178,14 @@ export function RoundInput() {
             2️⃣ Kartu
           </button>
           <button
-            onClick={() => setActiveTab('sun')}
+            onClick={() => setActiveTab('son')}
             className={`flex-1 py-2 px-3 rounded font-semibold transition-all ${
-              activeTab === 'sun'
+              activeTab === 'son'
                 ? 'bg-blue-500 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            3️⃣ Sun
+            3️⃣ Son
           </button>
         </div>
 
@@ -291,20 +291,20 @@ export function RoundInput() {
               </div>
 
               <button
-                onClick={() => setActiveTab('sun')}
+                onClick={() => setActiveTab('son')}
                 className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-lg transition-all"
               >
-                Lanjut ke Sun →
+                Lanjut ke Son →
               </button>
             </div>
           )}
 
-          {/* ===== TAB SUN ===== */}
-          {activeTab === 'sun' && (
-            <SunFailSelector
+          {/* ===== TAB SON ===== */}
+          {activeTab === 'son' && (
+            <SonFailSelector
               players={players}
-              onSelect={setSunFailedPlayers}
-              initialFailed={sunFailedPlayers}
+              onSelect={setSonFailedPlayers}
+              initialFailed={sonFailedPlayers}
             />
           )}
         </div>
@@ -315,7 +315,7 @@ export function RoundInput() {
           <div className="space-y-2">
             {players.map((player, idx) => {
               const p = preview[player.id] || {};
-              const statusIcon = p.sunFailed
+              const statusIcon = p.sonFailed
                 ? '☀️'
                 : p.isCate
                 ? '🏆'
@@ -355,7 +355,7 @@ export function RoundInput() {
         {/* Submit Button */}
         <button
           onClick={() => setShowConfirmModal(true)}
-          disabled={loading || sunFailedPlayers.length >= 2}
+          disabled={loading || sonFailedPlayers.length >= 2}
           className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white font-bold py-4 px-6 rounded-lg transition-all text-lg"
         >
           {loading ? '💾 Menyimpan...' : '✓ Simpan Ronde'}

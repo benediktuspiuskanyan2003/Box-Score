@@ -66,8 +66,8 @@ UI Re-render
 - Input jumlah joker digunakan
 - Real-time bonus calculation
 
-#### `SunFailSelector` - Sun Failure Marking
-- Mark pemain yang gagal Sun
+#### `SonFailSelector` - Son Failure Marking
+- Mark pemain yang gagal Son
 - Warning jika 2+ pemain gagal (ronde diulang)
 
 #### `PlayerRow` - Score Display
@@ -89,13 +89,13 @@ function calculateRoundScore({
   isCate,
   jokerUsed,      // joker used if CATE
   jokerHeld,      // joker held if not CATE
-  sunFailed,      // -50 penalty
+  sonFailed,      // -50 penalty
   cardScore       // minus value dari kartu sisa
 })
 ```
 
 **Conditions:**
-1. **Sun Gagal** → `-50` (overrides everything)
+1. **Son Gagal** → `-50` (overrides everything)
 2. **CATE** → `+50 + (jokerUsed * 100)`
 3. **Not CATE** → `-(cardScore) - (jokerHeld * 100)`
 
@@ -150,7 +150,7 @@ totalScore = -250 → NO RESET, tetap -250
    - is_cate
    - joker_used
    - joker_held
-   - sun_failed
+   - son_failed
    - card_score
    - round_total
    - score_reset

@@ -61,7 +61,7 @@ export function Rules() {
                 </div>
               </div>
               <div className="bg-orange-50 p-3 rounded">
-                <div className="font-semibold text-orange-900 mb-1">Jika Gagal Sun:</div>
+                <div className="font-semibold text-orange-900 mb-1">Jika Gagal Son:</div>
                 <div className="text-sm text-orange-800">
                   • -50 poin (keluar dari ronde)
                 </div>
@@ -82,14 +82,14 @@ export function Rules() {
 
           {/* Section 5 */}
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">☀️ Logika Sun Gagal</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-3">☀️ Logika Son Gagal</h2>
             <div className="space-y-2 text-sm text-gray-700">
               <div className="bg-gray-100 p-3 rounded">
-                <strong>1 pemain gagal Sun:</strong><br/>
+                <strong>1 pemain gagal Son:</strong><br/>
                 Pemain tersebut dapat -50, keluar dari ronde, permainan lanjut dengan pemain lain
               </div>
               <div className="bg-red-100 p-3 rounded border border-red-300">
-                <strong>2 pemain atau lebih gagal Sun:</strong><br/>
+                <strong>2 pemain atau lebih gagal Son:</strong><br/>
                 Ronde diulang (tidak disimpan), kartu dikocok ulang
               </div>
             </div>

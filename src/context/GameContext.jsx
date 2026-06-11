@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { supabase } from '../supabaseClient';
 import {
   initializeGame,
-  playCardToSon,
   playNewSon,
   playNewBox,
   extendSon,
@@ -22,197 +22,162 @@ export function useGameContext() {
   return context;
 }
 
-/**
- * Reducer untuk game state
- */
-function gameReducer(state, action) {
-  switch (action.type) {
-    case 'INIT_GAME':
-      return action.payload;
+export function GameProvider({ children, roomId, myUserId }) {
+  const [gameState, setGameState] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [loadingGame, setLoadingGame] = useState(true);
+  const sessionIdRef = useRef(null);
 
-    case 'PLAY_CARD_TO_SON': {
-      const result = playCardToSon(
-        state,
-        action.payload.playerIdx,
-        action.payload.cardIdx,
-        action.payload.sonIdx,
-        action.payload.position
-      );
-      if (result.success) {
-        return result.gameState;
+  // ── Ambil game state awal dari Supabase ──────────────────────
+  useEffect(() => {
+    if (!roomId) return;
+
+    const fetchSession = async () => {
+      setLoadingGame(true);
+      try {
+        const { data, error } = await supabase
+          .from('game_sessions')
+          .select('*')
+          .eq('room_id', roomId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching game session:', error);
+          return;
+        }
+
+        if (data) {
+          setSessionId(data.id);
+          sessionIdRef.current = data.id;
+          setGameState(data.game_state);
+        }
+      } catch (err) {
+        console.error('fetchSession error:', err);
+      } finally {
+        setLoadingGame(false);
       }
-      return state;
+    };
+
+    fetchSession();
+  }, [roomId]);
+
+  // ── Realtime: sync game state dari pemain lain ────────────────
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const channel = supabase
+      .channel(`game:${sessionId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'game_sessions',
+        filter: `id=eq.${sessionId}`
+      }, (payload) => {
+        console.log('Game state updated from Supabase');
+        setGameState(payload.new.game_state);
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [sessionId]);
+
+  // ── Sync game state ke Supabase ───────────────────────────────
+  const syncToSupabase = async (newGameState) => {
+    setGameState(newGameState); // Optimistic update lokal dulu
+
+    const { error } = await supabase
+      .from('game_sessions')
+      .update({
+        game_state: newGameState,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sessionIdRef.current);
+
+    if (error) {
+      console.error('Sync error:', error);
     }
+  };
 
-    case 'PLAY_NEW_SON': {
-      const result = playNewSon(state, action.payload.playerIdx, action.payload.cardIndices);
-      if (result.success) {
-        return result.gameState;
-      }
-      return state;
-    }
+  // ── Helper: cek apakah giliran user ini ──────────────────────
+  const isMyTurn = () => {
+    if (!gameState) return false;
+    const currentPlayer = gameState.players[gameState.currentTurnIdx];
+    return currentPlayer?.id === myUserId;
+  };
 
-    case 'PLAY_NEW_BOX': {
-      const result = playNewBox(state, action.payload.playerIdx, action.payload.cardIndices);
-      if (result.success) {
-        return result.gameState;
-      }
-      return state;
-    }
+  // ── Index pemain ini di array players ────────────────────────
+  const myPlayerIdx = gameState?.players.findIndex(p => p.id === myUserId) ?? -1;
 
-    case 'EXTEND_SON': {
-      const result = extendSon(
-        state,
-        action.payload.playerIdx,
-        action.payload.cardIdx,
-        action.payload.sonIdx,
-        action.payload.position
-      );
-      if (result.success) {
-        return result.gameState;
-      }
-      return state;
-    }
-
-    case 'ADD_TO_BOX': {
-      const result = addToBox(
-        state,
-        action.payload.playerIdx,
-        action.payload.cardIdx,
-        action.payload.boxIdx
-      );
-      if (result.success) {
-        return result.gameState;
-      }
-      return state;
-    }
-
-    case 'PLAYER_PASS': {
-      const result = playerPass(state, action.payload.playerIdx);
-      if (result.success) {
-        return result.gameState;
-      }
-      return state;
-    }
-
-    case 'DECLARE_FAIL_FIRST_SON': {
-      const result = declareFailFirstSon(state, action.payload.playerIdx);
-      
-      if (!result.success) {
-        return state; // Gagal, state tidak berubah
-      }
-      
-      if (result.restart) {
-        // RESTART: Initialize fresh game state dengan pemain yang sama
-        const originalPlayers = state.players.map(p => ({ id: p.id, name: p.name }));
-        const freshState = initializeGame(originalPlayers, state.minusLimit);
-        // Update round number (tetap di ronde yang sama, hanya restart)
-        freshState.round = state.round;
-        return freshState;
-      }
-      
-      // CONTINUE: Return updated state (pemain marked as son_failed, turn ke next player)
-      return state;
-    }
-
-    case 'NEXT_ROUND': {
-      const result = nextRound(state);
-      if (result.success) {
-        return result.gameState;
-      }
-      return state;
-    }
-
-    default:
-      return state;
-  }
-}
-
-/**
- * GameProvider Component
- */
-export function GameProvider({ children, initialPlayers = [], minusLimit = -300 }) {
-  const [gameState, dispatch] = useReducer(gameReducer, null, (initial) => {
-    if (initialPlayers.length === 0) return null;
-    return initializeGame(initialPlayers, minusLimit);
-  });
-
-  // Action creators
+  // ── Actions ───────────────────────────────────────────────────
   const actions = {
-    initGame: (players, limit) => {
-      dispatch({
-        type: 'INIT_GAME',
-        payload: initializeGame(players, limit)
-      });
-    },
-
-    playCardToSon: (playerIdx, cardIdx, sonIdx, position = 'right') => {
-      dispatch({
-        type: 'PLAY_CARD_TO_SON',
-        payload: { playerIdx, cardIdx, sonIdx, position }
-      });
-    },
-
     playNewSon: (playerIdx, cardIndices) => {
-      dispatch({
-        type: 'PLAY_NEW_SON',
-        payload: { playerIdx, cardIndices }
-      });
+      if (!isMyTurn()) return;
+      const result = playNewSon(gameState, playerIdx, cardIndices);
+      if (result.success) syncToSupabase(result.gameState);
     },
 
     playNewBox: (playerIdx, cardIndices) => {
-      dispatch({
-        type: 'PLAY_NEW_BOX',
-        payload: { playerIdx, cardIndices }
-      });
+      if (!isMyTurn()) return;
+      const result = playNewBox(gameState, playerIdx, cardIndices);
+      if (result.success) syncToSupabase(result.gameState);
     },
 
     extendSon: (playerIdx, cardIdx, sonIdx, position = 'right') => {
-      dispatch({
-        type: 'EXTEND_SON',
-        payload: { playerIdx, cardIdx, sonIdx, position }
-      });
+      if (!isMyTurn()) return;
+      const result = extendSon(gameState, playerIdx, cardIdx, sonIdx, position);
+      if (result.success) syncToSupabase(result.gameState);
     },
 
     addToBox: (playerIdx, cardIdx, boxIdx) => {
-      dispatch({
-        type: 'ADD_TO_BOX',
-        payload: { playerIdx, cardIdx, boxIdx }
-      });
+      if (!isMyTurn()) return;
+      const result = addToBox(gameState, playerIdx, cardIdx, boxIdx);
+      if (result.success) syncToSupabase(result.gameState);
     },
 
     playerPass: (playerIdx) => {
-      dispatch({
-        type: 'PLAYER_PASS',
-        payload: { playerIdx }
-      });
+      if (!isMyTurn()) return;
+      const result = playerPass(gameState, playerIdx);
+      if (result.success) syncToSupabase(result.gameState);
     },
 
     declareFailFirstSon: (playerIdx) => {
-      dispatch({
-        type: 'DECLARE_FAIL_FIRST_SON',
-        payload: { playerIdx }
-      });
+      if (!isMyTurn()) return;
+      const result = declareFailFirstSon(gameState, playerIdx);
+      if (!result.success) return;
+
+      if (result.restart) {
+        const freshState = initializeGame(
+          gameState.players.map(p => ({ id: p.id, name: p.name })),
+          gameState.minusLimit
+        );
+        freshState.round = gameState.round;
+        syncToSupabase(freshState);
+      } else {
+        syncToSupabase(result.gameState);
+      }
     },
 
     nextRound: () => {
-      dispatch({
-        type: 'NEXT_ROUND'
-      });
+      const result = nextRound(gameState);
+      if (result.success) syncToSupabase(result.gameState);
     },
 
     getRoundScores: (roundNumber) => {
-      if (gameState) {
-        return getRoundScores(gameState, roundNumber);
-      }
+      if (gameState) return getRoundScores(gameState, roundNumber);
       return [];
     }
   };
 
   return (
-    <GameContext.Provider value={{ gameState, ...actions }}>
+    <GameContext.Provider value={{
+      gameState,
+      loadingGame,
+      myPlayerIdx,
+      myUserId,
+      isMyTurn,
+      ...actions
+    }}>
       {children}
     </GameContext.Provider>
   );
 }
-
