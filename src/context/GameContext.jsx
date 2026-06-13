@@ -9,7 +9,8 @@ import {
   playerPass,
   declareFailFirstSon,
   nextRound,
-  getRoundScores
+  getRoundScores,
+  throwJoker
 } from '../engine/gameEngine.js';
 
 const GameContext = createContext();
@@ -165,7 +166,13 @@ export function GameProvider({ children, roomId, myUserId }) {
     getRoundScores: (roundNumber) => {
       if (gameState) return getRoundScores(gameState, roundNumber);
       return [];
-    }
+    },
+
+    throwJoker: (playerIdx, cardIdx) => {
+      if (!isMyTurn()) return;
+      const result = throwJoker(gameState, playerIdx, cardIdx);
+      if (result.success) syncToSupabase(result.gameState);
+    },
   };
 
   return (
