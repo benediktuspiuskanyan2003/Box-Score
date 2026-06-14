@@ -130,13 +130,6 @@ export function LoginPage() {
                 </p>
               </div>
             </form>
-
-            {/* Demo credentials */}
-            <div className="mt-6 p-3 bg-slate-700/50 rounded-lg text-xs text-slate-300 hidden lg:block">
-              <p className="font-semibold mb-1">🧪 Demo (untuk testing):</p>
-              <p>Email: demo@boxgame.com</p>
-              <p>Password: demo123</p>
-            </div>
           </div>
         </div>
       </div>
