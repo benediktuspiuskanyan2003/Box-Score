@@ -106,6 +106,7 @@ export function initializeGame(players, minusLimit = -300) {
   const playerStates = players.map((player, idx) => ({
     id: player.id,
     name: player.name,
+    isBot: player.isBot || false,
     hand: playerCards[idx] || [],
     score: 0,
     status: cateTanganPlayers.some(p => p.playerId === player.id) ? 'cate_tangan' : 'active',
@@ -685,6 +686,7 @@ export function nextRound(gameState) {
   gameState.players.forEach((player, idx) => {
     player.hand = playerCards[idx] || [];
     player.score = 0;
+    player.isBot = player.isBot || false;
     if (cateTanganPlayers.some(p => p.playerId === player.id)) {
       player.status = 'cate_tangan';
       player.score = 50;

@@ -111,44 +111,55 @@ export function GameProvider({ children, roomId, myUserId }) {
 
   // ── Actions ───────────────────────────────────────────────────
   const actions = {
-    playNewSon: (playerIdx, cardIndices) => {
-      if (!isMyTurn()) return;
-      const result = playNewSon(gameState, playerIdx, cardIndices);
+    playNewSon: (playerIdx, cardIndices, jokerPosition = 'auto') => {
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
+      const result = playNewSon(gameState, playerIdx, cardIndices, jokerPosition);
       if (result.success) syncToSupabase(result.gameState);
     },
 
     playNewBox: (playerIdx, cardIndices) => {
-      if (!isMyTurn()) return;
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
       const result = playNewBox(gameState, playerIdx, cardIndices);
       if (result.success) syncToSupabase(result.gameState);
     },
 
     extendSon: (playerIdx, cardIdx, sonIdx, position = 'right') => {
-      if (!isMyTurn()) return;
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
       const result = extendSon(gameState, playerIdx, cardIdx, sonIdx, position);
       if (result.success) syncToSupabase(result.gameState);
     },
 
-    addToBox: (playerIdx, cardIdx, boxIdx) => {
-      if (!isMyTurn()) return;
-      const result = addToBox(gameState, playerIdx, cardIdx, boxIdx);
+    addToBox: (playerIdx, cardIndices, boxIdx) => {
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
+      const result = addToBox(gameState, playerIdx, cardIndices, boxIdx);
       if (result.success) syncToSupabase(result.gameState);
     },
 
     playerPass: (playerIdx) => {
-      if (!isMyTurn()) return;
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
       const result = playerPass(gameState, playerIdx);
       if (result.success) syncToSupabase(result.gameState);
     },
 
+    // SESUDAH
     declareFailFirstSon: (playerIdx) => {
-      if (!isMyTurn()) return;
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
       const result = declareFailFirstSon(gameState, playerIdx);
       if (!result.success) return;
 
       if (result.restart) {
         const freshState = initializeGame(
-          gameState.players.map(p => ({ id: p.id, name: p.name })),
+          gameState.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            isBot: p.isBot || false, // ← tambah ini
+          })),
           gameState.minusLimit
         );
         freshState.round = gameState.round;
@@ -169,7 +180,8 @@ export function GameProvider({ children, roomId, myUserId }) {
     },
 
     throwJoker: (playerIdx, cardIdx) => {
-      if (!isMyTurn()) return;
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
       const result = throwJoker(gameState, playerIdx, cardIdx);
       if (result.success) syncToSupabase(result.gameState);
     },

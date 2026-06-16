@@ -65,7 +65,7 @@ function App() {
 
           {/* Fase 2 - Game Engine - Protected */}
           <Route path="/play/setup" element={<ProtectedRoute><PlaySetup /></ProtectedRoute>} />
-          <Route path="/play/game" element={<ProtectedRoute><PlayGame /></ProtectedRoute>} />
+          <Route path="/play/game/:roomId" element={<ProtectedRoute><PlayGame /></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/home" />} />

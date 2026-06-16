@@ -7,15 +7,19 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { GameProvider, useGameContext } from '../context/GameContext';
 import { getValidMoves, canExtendSonMultiple, isValidBox, detectSonJokerAmbiguity, jokerHasValidUse } from '../engine/cardValidator';
 import { CardSprite } from '../components/GamePlay/CardSprite';
 import { SVG_CARDS_URL, CARD_BACK_URL } from '../utils/cardMapper';
+import { useAuth } from '../context/AuthContext';
+import { computeBotAction } from '../engine/botEngine';
 
 export function PlayGame() {
   const location = useLocation();
-  const { roomId, myUserId } = location.state || {};
+  const { roomId } = useParams();
+  const { userProfile } = useAuth(); // ambil myUserId dari context langsung
+  const myUserId = userProfile?.id;
   return (
     <GameProvider roomId={roomId} myUserId={myUserId}>
       <PlayGameContent />
@@ -364,6 +368,13 @@ function PlayGameContent() {
   const failedSonCount = gameState?.players.filter(p => p.status === 'son_failed').length || 0;
   const playerCount = gameState?.players.length || 0;
   const positions = gameState ? getPlayerPositions(playerCount, myPlayerIdx) : {};
+  useEffect(() => {
+  if (!gameState || loadingGame) return; // ← tunggu loading selesai dulu
+  if (myPlayerIdx < 0) {
+    navigate('/home');
+  }
+}, [gameState, myPlayerIdx, loadingGame]);
+
   const [showRanking, setShowRanking] = useState(false);
 
   const computeValidSonCards = (hand) => {
@@ -461,6 +472,47 @@ function PlayGameContent() {
       setExtendableSons([]);
     }
   }, [gameState?.currentTurnIdx, gameState?.meja, gameState?.phase, action, selectedCards, myPlayerIdx]);
+
+// ── BOT: eksekusi aksi otomatis saat giliran bot ──
+useEffect(() => {
+  if (!gameState || gameState.phase === 'round_end') return;
+
+  const currentPlayer = gameState.players[gameState.currentTurnIdx];
+  if (!currentPlayer?.isBot) return;
+
+  // Delay supaya terasa natural
+  const timer = setTimeout(() => {
+    const botIdx = gameState.currentTurnIdx;
+    const action = computeBotAction(gameState, botIdx);
+
+    switch (action.type) {
+      case 'new_son':
+        playNewSon(botIdx, action.cardIndices, action.jokerPosition || 'auto');
+        break;
+      case 'new_box':
+        playNewBox(botIdx, action.cardIndices);
+        break;
+      case 'extend_son':
+        extendSon(botIdx, action.cardIndices, action.sonIdx, action.position);
+        break;
+      case 'add_to_box':
+        addToBox(botIdx, action.cardIndices, action.boxIdx);
+        break;
+      case 'throw_joker':
+        throwJoker(botIdx, action.cardIdx);
+        break;
+      case 'fail_first_son':
+        declareFailFirstSon(botIdx);
+        break;
+      case 'pass':
+      default:
+        playerPass(botIdx);
+        break;
+    }
+  }, 1200); // delay 1.2 detik
+
+  return () => clearTimeout(timer);
+}, [gameState?.currentTurnIdx, gameState?.phase]);
 
   const handleCardClick = (cardIdx) => {
     if (!isMyTurnNow || myPlayer?.status !== 'active') return;

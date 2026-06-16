@@ -18,9 +18,12 @@ export function WaitingRoom() {
   const [isReady, setIsReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [bots, setBots] = useState([]);
 
-  const allReady = players.length >= 4 && players.every(p => p.is_ready);
-
+  const totalPlayers = players.length + bots.length;
+  const allReady = totalPlayers >= 4 && players.every(p => 
+    p.user_id === room?.creator_id || p.is_ready
+  );
   const playersRef = React.useRef(players);
   useEffect(() => {
     playersRef.current = players;
@@ -83,13 +86,7 @@ export function WaitingRoom() {
       }, (payload) => {
         // Di realtime subscription rooms UPDATE
       if (payload.new.status === 'playing') {
-        navigate('/play/game', {
-          state: {
-            roomId: room.id,
-            // ✅ Tidak perlu kirim players lagi, diambil dari DB
-            myUserId: userProfile.id
-          }
-        });
+        navigate(`/play/game/${room.id}`);
       }
       })
       .subscribe();
@@ -125,18 +122,48 @@ export function WaitingRoom() {
       .eq('user_id', userProfile.id);
   };
 
+  const handleAddBot = () => {
+  const botCount = bots.length + 1;
+    if (players.length + bots.length >= 5) return;
+    setBots(prev => [...prev, {
+    id: `bot_${botCount}`,
+    name: `Bot ${botCount}`,
+    isBot: true,
+    }]);
+  };
+
+  const handleRemoveBot = (botId) => {
+    setBots(prev => prev.filter(b => b.id !== botId));
+  };
+
   // ── Mulai permainan (hanya creator) ───────────────────────────
   const handleStartGame = async () => {
-  if (!allReady) return;
+  console.log('allReady:', allReady);
+  console.log('players:', players);
+  console.log('bots:', bots);
+  console.log('totalPlayers:', totalPlayers);
+  if (!allReady) {
+    console.log('BLOCKED: allReady false');
+    return;
+  }
 
-  // Buat initial game state
-  const players = playersRef.current.map(p => ({
-    id: p.user_id,
-    name: p.users?.display_name || 'Unknown',
-    profilePicture: p.users?.profile_picture_url || null
+  const humanPlayers = playersRef.current.map(p => ({
+  id: p.user_id,
+  name: p.users?.display_name || 'Unknown',
+  isBot: false,
   }));
 
-  const initialGameState = initializeGame(players, -300);
+  const botPlayers = bots.map(bot => ({
+  id: bot.id,
+  name: bot.name,
+  isBot: true,
+  }));
+
+  const allPlayers = [...humanPlayers, ...botPlayers];
+  console.log('allPlayers:', allPlayers); // ← tambah
+  
+  const initialGameState = initializeGame(allPlayers, -300);
+  console.log('initialGameState:', initialGameState); // ← tambah
 
   // Simpan ke Supabase
   const { data: session, error } = await supabase
@@ -148,11 +175,20 @@ export function WaitingRoom() {
     .select()
     .single();
 
+   console.log('session:', session); // ← tambah
+  console.log('error:', error);     // ← tambah
   if (error) {
     toast.error('Gagal memulai game');
     console.error(error);
     return;
   }
+
+  const { error: updateError } = await supabase
+    .from('rooms')
+    .update({ status: 'playing' })
+    .eq('id', room.id);
+  
+  console.log('updateError:', updateError); // ← tambah
 
   // Update status room → trigger redirect semua pemain
   await supabase
@@ -203,7 +239,7 @@ export function WaitingRoom() {
         {/* Player List */}
         <div className="bg-white rounded-3xl p-6 shadow-xl mb-6">
           <h2 className="font-bold text-slate-800 mb-4 text-center">
-            👥 Pemain ({players.length}/5)
+            👥 Pemain ({totalPlayers}/5)
           </h2>
 
           <div className="space-y-3 mb-6">
@@ -255,15 +291,46 @@ export function WaitingRoom() {
                 </div>
               );
             })}
+
+            {/* Bot List */}
+            {bots.map(bot => (
+              <div key={bot.id} className="p-4 rounded-lg border-2 bg-slate-50 border-slate-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg bg-gradient-to-br from-gray-500 to-gray-700">
+                    🤖
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-slate-800">{bot.name}</div>
+                    <div className="text-xs text-slate-600">🤖 Bot (Hard)</div>
+                  </div>
+                  {isCreator && (
+                    <button
+                      onClick={() => handleRemoveBot(bot.id)}
+                      className="text-red-500 text-xs font-bold"
+                    >✕ Hapus</button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Tombol tambah bot — hanya creator, max 5 total */}
+            {isCreator && players.length + bots.length < 5 && (
+              <button
+                onClick={handleAddBot}
+                className="w-full border-2 border-dashed border-slate-300 text-slate-500 font-bold py-3 rounded-lg hover:border-purple-400 hover:text-purple-500 transition-all"
+              >
+                🤖 + Tambah Bot
+              </button>
+            )}
           </div>
 
           {/* Status warnings */}
-          {players.length < 4 && (
+          {totalPlayers < 4 && (
             <div className="mb-4 p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center text-sm text-yellow-800 font-semibold">
-              ⚠️ Minimal 4 pemain untuk mulai ({players.length}/4)
+              ⚠️ Minimal 4 pemain untuk mulai ({totalPlayers}/4)
             </div>
           )}
-          {players.length >= 4 && !allReady && (
+          {totalPlayers >= 4 && !allReady && (
             <div className="mb-4 p-3 bg-blue-50 border-2 border-blue-300 rounded-lg text-center text-sm text-blue-800 font-semibold">
               ⏳ Menunggu semua pemain siap...
             </div>
