@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
+import { useSoundEffect } from '../hooks/useSoundEffect';
 import {
   initializeGame,
   playNewSon,
@@ -23,11 +24,73 @@ export function useGameContext() {
   return context;
 }
 
+/**
+ * Tentukan suara apa yang harus dimainkan berdasarkan perbandingan
+ * gameState SEBELUM dan SETELAH sebuah aksi terjadi.
+ *
+ * Dipanggil dari dua tempat:
+ * 1. Setelah aksi lokal sukses (pelaku aksi)
+ * 2. Saat menerima update realtime dari Supabase (pemain lain)
+ *
+ * Supaya kedua jalur menghasilkan suara yang sama, logic deteksi
+ * berdasarkan PERBEDAAN STATE, bukan berdasarkan "siapa yang klik apa".
+ */
+function detectSoundFromStateChange(prevState, newState) {
+  if (!prevState || !newState) return null;
+
+  // ── Cate (ronde berakhir karena ada pemain habis kartu) ──
+  if (newState.phase === 'round_end' && prevState.phase !== 'round_end') {
+    const hasCateWinner = newState.players.some(
+      p => p.status === 'cate' || p.status === 'cate_tangan'
+    );
+    if (hasCateWinner && !newState.noWinner) return 'cate';
+    return 'penalty'; // round_end tanpa cate winner = kurang menguntungkan
+  }
+
+  // ── Gagal Son (status berubah jadi son_failed) ──
+  const newlyFailedSon = newState.players.some((p, idx) =>
+    p.status === 'son_failed' && prevState.players[idx]?.status !== 'son_failed'
+  );
+  if (newlyFailedSon) return 'penalty';
+
+  // ── Joker dipakai/dibuang (riwayat aksi terbaru) ──
+  const lastHistory = newState.history?.[newState.history.length - 1];
+  if (lastHistory) {
+    if (lastHistory.action === 'throw_joker') return 'joker';
+
+    // Cek apakah aksi terbaru melibatkan joker (new_son/extend_son dengan joker)
+    if (lastHistory.action === 'new_son' || lastHistory.action === 'extend_son') {
+      const sons = newState.meja.sons;
+      const relevantSon = lastHistory.sonId
+        ? sons.find(s => s.id === lastHistory.sonId)
+        : sons[sons.length - 1];
+      if (relevantSon?.cards.some(c => c.isJoker)) return 'joker';
+      if (lastHistory.action === 'new_son') return 'card_play';
+      return 'card_play';
+    }
+
+    if (lastHistory.action === 'new_box' || lastHistory.action === 'add_to_box') {
+      return 'box';
+    }
+
+    if (lastHistory.action === 'play_to_son') return 'card_play';
+  }
+
+  // ── Giliran berpindah (fallback, kalau tidak ada history match di atas) ──
+  if (newState.currentTurnIdx !== prevState.currentTurnIdx) {
+    return 'turn';
+  }
+
+  return null;
+}
+
 export function GameProvider({ children, roomId, myUserId }) {
   const [gameState, setGameState] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [loadingGame, setLoadingGame] = useState(true);
   const sessionIdRef = useRef(null);
+  const prevGameStateRef = useRef(null);
+  const { play } = useSoundEffect();
 
   // ── Ambil game state awal dari Supabase ──────────────────────
   useEffect(() => {
@@ -51,6 +114,7 @@ export function GameProvider({ children, roomId, myUserId }) {
           setSessionId(data.id);
           sessionIdRef.current = data.id;
           setGameState(data.game_state);
+          prevGameStateRef.current = data.game_state; // baseline, tidak perlu play suara
         }
       } catch (err) {
         console.error('fetchSession error:', err);
@@ -74,16 +138,27 @@ export function GameProvider({ children, roomId, myUserId }) {
         table: 'game_sessions',
         filter: `id=eq.${sessionId}`
       }, (payload) => {
-        console.log('Game state updated from Supabase');
-        setGameState(payload.new.game_state);
+        const newState = payload.new.game_state;
+
+        // Deteksi & mainkan suara berdasarkan perbedaan state
+        const sound = detectSoundFromStateChange(prevGameStateRef.current, newState);
+        if (sound) play(sound);
+
+        prevGameStateRef.current = newState;
+        setGameState(newState);
       })
       .subscribe();
 
     return () => supabase.removeChannel(channel);
-  }, [sessionId]);
+  }, [sessionId, play]);
 
   // ── Sync game state ke Supabase ───────────────────────────────
   const syncToSupabase = async (newGameState) => {
+    // Mainkan suara untuk pelaku aksi sendiri (optimistic, sebelum konfirmasi server)
+    const sound = detectSoundFromStateChange(prevGameStateRef.current, newGameState);
+    if (sound) play(sound);
+
+    prevGameStateRef.current = newGameState;
     setGameState(newGameState); // Optimistic update lokal dulu
 
     const { error } = await supabase
@@ -146,7 +221,6 @@ export function GameProvider({ children, roomId, myUserId }) {
       if (result.success) syncToSupabase(result.gameState);
     },
 
-    // SESUDAH
     declareFailFirstSon: (playerIdx) => {
       const currentPlayer = gameState?.players[playerIdx];
       if (!currentPlayer?.isBot && !isMyTurn()) return;
@@ -158,7 +232,7 @@ export function GameProvider({ children, roomId, myUserId }) {
           gameState.players.map(p => ({
             id: p.id,
             name: p.name,
-            isBot: p.isBot || false, // ← tambah ini
+            isBot: p.isBot || false,
           })),
           gameState.minusLimit
         );
