@@ -39,6 +39,7 @@ export function WaitingRoom() {
         .single();
 
       setRoom(roomData);
+      setBots(roomData.bots || []);
 
       const { data: playersData } = await supabase
         .from('room_players')
@@ -84,6 +85,7 @@ export function WaitingRoom() {
         table: 'rooms',
         filter: `id=eq.${room.id}`
       }, (payload) => {
+        setBots(payload.new.bots || []);
         // Di realtime subscription rooms UPDATE
       if (payload.new.status === 'playing') {
         navigate(`/play/game/${room.id}`);
@@ -122,19 +124,25 @@ export function WaitingRoom() {
       .eq('user_id', userProfile.id);
   };
 
-  const handleAddBot = () => {
+  const handleAddBot = async () => {
   const botCount = bots.length + 1;
-    if (players.length + bots.length >= 5) return;
-    setBots(prev => [...prev, {
+  if (players.length + bots.length >= 5) return;
+  
+  const newBots = [...bots, {
     id: `bot_${botCount}`,
     name: `Bot ${botCount}`,
     isBot: true,
-    }]);
-  };
+  }];
+  
+  setBots(newBots);
+  await supabase.from('rooms').update({ bots: newBots }).eq('id', room.id);
+};
 
-  const handleRemoveBot = (botId) => {
-    setBots(prev => prev.filter(b => b.id !== botId));
-  };
+const handleRemoveBot = async (botId) => {
+  const newBots = bots.filter(b => b.id !== botId);
+  setBots(newBots);
+  await supabase.from('rooms').update({ bots: newBots }).eq('id', room.id);
+};
 
   // ── Mulai permainan (hanya creator) ───────────────────────────
   const handleStartGame = async () => {

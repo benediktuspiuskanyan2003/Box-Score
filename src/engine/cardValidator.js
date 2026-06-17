@@ -136,7 +136,8 @@ function checkConsecutive(values, jokerCount, aPosition) {
   const expectedLength = max - min + 1;
   const gaps = expectedLength - sorted.length;
 
-  if (gaps <= jokerCount && expectedLength <= 13) {
+  const totalCardsUsed = sorted.length + jokerCount;
+  if (gaps <= jokerCount && expectedLength <= 13 && totalCardsUsed === expectedLength) {
     return { valid: true, aPosition };
   }
 

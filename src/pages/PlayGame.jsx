@@ -523,6 +523,7 @@ useEffect(() => {
 
   const handleCreateSon = () => {
     if (selectedCards.length < 3) return alert('Butuh minimal 3 kartu untuk SON');
+    if (selectedCards.length > 5) return alert('SON baru maksimal 5 kartu');
     const selectedCardObjects = selectedCards.map(idx => myHand[idx]);
     const hasJoker = selectedCardObjects.some(c => c.isJoker);
     if (hasJoker && gameState.phase !== 'first_son') {

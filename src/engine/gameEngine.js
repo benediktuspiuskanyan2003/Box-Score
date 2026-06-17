@@ -201,6 +201,10 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
     return { success: false, reason: 'Butuh minimal 3 kartu' };
   }
 
+  if (cards.length > 5) {
+  return { success: false, reason: 'SON baru maksimal 5 kartu' };
+  }
+
   // ✅ Blokir Joker di fase first_son
   if (gameState.phase === 'first_son') {
     if (cards.some(c => c.isJoker)) {
@@ -388,6 +392,85 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
 }
 
 /**
+ * Urutkan kartu yang akan di-extend berdasarkan posisi gap yang diisi.
+ * Joker mengisi slot kosong di antara nonJoker — urutan ditentukan oleh
+ * urutan value nonJoker, lalu Joker ditempatkan sesuai gap-nya.
+ */
+function orderExtendCards(cards, sonCards, position) {
+  const nonJokers = cards.filter(c => !c.isJoker);
+  const jokers = cards.filter(c => c.isJoker);
+
+  if (jokers.length === 0) {
+    // Tidak ada joker, urutkan biasa berdasarkan value
+    return [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
+  }
+
+  if (nonJokers.length === 0) {
+    // Semua joker, urutan tidak penting
+    return cards;
+  }
+
+  // Ada campuran: tentukan apakah joker harus di kiri atau kanan dari nonJoker
+  // berdasarkan posisi terhadap son yang ada.
+  const sonFirst = sonCards[0];
+  const sonLast = sonCards[sonCards.length - 1];
+
+  if (cards.length === 1) return cards; // 1 kartu, tidak perlu urut
+
+  // Untuk 2 kartu (1 nonJoker + 1 joker): tentukan mana yang lebih dekat ke son
+  const nonJokerValue = getCardValue(nonJokers[0].rank);
+
+  if (position === 'left') {
+    // Format: [..., X, Y, sonFirst, ...] → Y harus tepat sebelum sonFirst
+    // Joker mengisi slot yang LEBIH BESAR (lebih dekat ke son), nonJoker di luar
+    const sonFirstValue = sonFirst.isJoker
+      ? getImpliedValueAtPositionLocal(sonCards, 'left')
+      : getCardValue(sonFirst.rank);
+
+    // Slot yang diisi nonJoker = nonJokerValue, slot yang diisi joker = sisanya
+    // Urutkan dari kecil ke besar (kiri ke kanan menuju son)
+    if (nonJokerValue < sonFirstValue - 1) {
+      // nonJoker mengisi slot lebih jauh dari son → nonJoker dulu, baru joker
+      return [...nonJokers, ...jokers];
+    } else {
+      // nonJoker mengisi slot lebih dekat ke son → joker dulu, baru nonJoker
+      return [...jokers, ...nonJokers];
+    }
+  } else {
+    // position === 'right': format [..., sonLast, X, Y, ...] → X harus tepat setelah sonLast
+    const sonLastValue = sonLast.isJoker
+      ? getImpliedValueAtPositionLocal(sonCards, 'right')
+      : getCardValue(sonLast.rank);
+
+    if (nonJokerValue > sonLastValue + 1) {
+      // nonJoker mengisi slot lebih jauh dari son → joker dulu, baru nonJoker
+      return [...jokers, ...nonJokers];
+    } else {
+      // nonJoker mengisi slot lebih dekat ke son → nonJoker dulu, baru joker
+      return [...nonJokers, ...jokers];
+    }
+  }
+}
+
+// Re-implementasi getImpliedValueAtPosition lokal (sama seperti di cardValidator.js)
+function getImpliedValueAtPositionLocal(sonCards, position) {
+  const firstNonJoker = sonCards.find(c => !c.isJoker);
+  const lastNonJoker = [...sonCards].reverse().find(c => !c.isJoker);
+  if (!firstNonJoker || !lastNonJoker) return null;
+
+  const firstNonJokerIdx = sonCards.indexOf(firstNonJoker);
+  const firstNonJokerVal = getCardValue(firstNonJoker.rank);
+
+  if (position === 'left') {
+    return firstNonJokerVal - firstNonJokerIdx;
+  } else {
+    const lastNonJokerIdx = sonCards.lastIndexOf(lastNonJoker);
+    const lastNonJokerVal = getCardValue(lastNonJoker.rank);
+    const jokersOnRight = sonCards.length - 1 - lastNonJokerIdx;
+    return lastNonJokerVal + jokersOnRight;
+  }
+}
+/**
  * Pemain extend SON yang sudah ada
  */
 export function extendSon(gameState, playerIdx, cardIdx, sonIdx, position = 'right') {
@@ -413,13 +496,13 @@ export function extendSon(gameState, playerIdx, cardIdx, sonIdx, position = 'rig
   if (!validation.valid) {
     return { success: false, reason: validation.reason };
   }
+  
+  const orderedCards = orderExtendCards(cards, son.cards, position);
 
   if (position === 'left') {
-    const sortedCards = [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
-    son.cards = [...sortedCards, ...son.cards];
+    son.cards = [...orderedCards, ...son.cards];
   } else {
-    const sortedCards = [...cards].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
-    son.cards = [...son.cards, ...sortedCards];
+    son.cards = [...son.cards, ...orderedCards];
   }
 
   const sortedIndices = [...cardIndices].sort((a, b) => b - a);
