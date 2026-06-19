@@ -7,9 +7,10 @@ import { EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginAsGuest } = useAuth();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const [showPassword, setShowPassword] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
 
   const onSubmit = async (data) => {
     try {
@@ -18,6 +19,19 @@ export function LoginPage() {
       navigate('/home');
     } catch (err) {
       toast.error(err.message || 'Login gagal');
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setGuestLoading(true);
+    try {
+      await loginAsGuest();
+      toast.success('Masuk sebagai Guest!');
+      navigate('/home');
+    } catch (err) {
+      toast.error(err.message || 'Gagal masuk sebagai guest');
+    } finally {
+      setGuestLoading(false);
     }
   };
 
@@ -120,6 +134,32 @@ export function LoginPage() {
                 {isSubmitting ? 'Login...' : 'Login'}
               </button>
 
+              {/* Divider */}
+              <div className="flex items-center gap-3 pt-2">
+                <div className="flex-1 h-px bg-slate-700"></div>
+                <span className="text-slate-500 text-xs font-medium">ATAU</span>
+                <div className="flex-1 h-px bg-slate-700"></div>
+              </div>
+
+              {/* Guest login button */}
+              <button
+                type="button"
+                onClick={handleGuestLogin}
+                disabled={guestLoading}
+                className="w-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700/50 disabled:cursor-not-allowed text-slate-200 font-semibold py-2 px-4 rounded-lg transition duration-300 border border-slate-600 flex items-center justify-center gap-2"
+              >
+                {guestLoading ? (
+                  'Masuk...'
+                ) : (
+                  <>
+                    <span>👤</span> Main sebagai Guest
+                  </>
+                )}
+              </button>
+              <p className="text-slate-500 text-xs text-center -mt-1">
+                Progress tidak tersimpan permanen, bisa didaftarkan nanti
+              </p>
+
               {/* Signup link */}
               <div className="text-center pt-4 border-t border-slate-700">
                 <p className="text-slate-400 text-sm">
@@ -136,4 +176,3 @@ export function LoginPage() {
     </div>
   );
 }
-

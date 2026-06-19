@@ -145,6 +145,86 @@ const signup = async (email, password, displayName) => {
     }
   };
 
+  // ✅ Login sebagai Guest — anonymous sign-in, profil dibuat otomatis
+  // lewat trigger handle_new_user() (sudah di-update untuk handle email null)
+  const loginAsGuest = async () => {
+    try {
+      setError(null);
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+
+      // Beri sedikit delay supaya trigger handle_new_user() selesai
+      // insert row ke public.users sebelum kita fetch profile-nya.
+      // onAuthStateChange akan set `user`, tapi userProfile butuh fetch manual
+      // karena initializeAuth hanya jalan sekali di awal mount.
+      if (data.user) {
+        const profile = await fetchProfileWithRetry(data.user.id);
+        if (profile) setUserProfile(profile);
+      }
+
+      return data.user;
+    } catch (err) {
+      const errorMsg = err.message || 'Gagal masuk sebagai guest';
+      setError(errorMsg);
+      throw err;
+    }
+  };
+
+  // Helper: fetch profile dengan retry, karena trigger INSERT
+  // mungkin butuh sedikit waktu untuk commit setelah signInAnonymously resolve.
+  const fetchProfileWithRetry = async (authId, attempts = 3, delayMs = 400) => {
+    for (let i = 0; i < attempts; i++) {
+      const { data: profile, error: err } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_id', authId)
+        .single();
+
+      if (profile && !err) return profile;
+      if (i < attempts - 1) await new Promise(res => setTimeout(res, delayMs));
+    }
+    console.warn('fetchProfileWithRetry: profile belum tersedia setelah beberapa percobaan');
+    return null;
+  };
+
+  // ✅ Upgrade akun Guest → akun permanen (email + password)
+  // Memakai supabase.auth.updateUser, yang akan mengubah baris auth.users
+  // yang SAMA (auth_id tetap sama), sehingga semua data game/room/score
+  // yang sudah terhubung ke auth_id ini tetap utuh — tidak ada migrasi data.
+  const upgradeGuestAccount = async (email, password, displayName) => {
+    try {
+      setError(null);
+
+      if (!user) throw new Error('Tidak ada sesi guest yang aktif');
+
+      const { data, error: updateError } = await supabase.auth.updateUser({
+        email,
+        password,
+        data: { display_name: displayName }
+      });
+
+      if (updateError) throw updateError;
+
+      // Update juga row di public.users — trigger handle_new_user()
+      // TIDAK terpanggil lagi di sini (itu hanya untuk INSERT baru),
+      // jadi email & display_name perlu di-update manual.
+      const { error: profileError } = await supabase
+        .from('users')
+        .update({ email, display_name: displayName })
+        .eq('auth_id', user.id);
+
+      if (profileError) throw profileError;
+
+      await refreshProfile();
+
+      return data.user;
+    } catch (err) {
+      const errorMsg = err.message || 'Gagal upgrade akun';
+      setError(errorMsg);
+      throw err;
+    }
+  };
+
   // Logout
   const logout = async () => {
     try {
@@ -177,6 +257,10 @@ const signup = async (email, password, displayName) => {
     }
   };
 
+  // ✅ Helper: apakah user saat ini adalah guest (anonymous)
+  // Supabase menandai anonymous user lewat field `is_anonymous` di auth user object.
+  const isGuest = !!user?.is_anonymous;
+
   const value = {
     user,
     userProfile,
@@ -184,9 +268,12 @@ const signup = async (email, password, displayName) => {
     error,
     signup,
     login,
+    loginAsGuest,
+    upgradeGuestAccount,
     logout,
     refreshProfile,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
+    isGuest
   };
 
   return (

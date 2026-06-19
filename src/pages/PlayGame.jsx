@@ -14,6 +14,7 @@ import { CardSprite } from '../components/GamePlay/CardSprite';
 import { SVG_CARDS_URL, CARD_BACK_URL } from '../utils/cardMapper';
 import { useAuth } from '../context/AuthContext';
 import { computeBotAction } from '../engine/botEngine';
+import { motion, LayoutGroup } from 'framer-motion';
 
 export function PlayGame() {
   const location = useLocation();
@@ -251,11 +252,10 @@ function OpponentHand({ count, position, isActive, player }) {
 function MyHand({ hand, selectedCards, onCardClick, validIndices }) {
   const cardW = 62;
   const cardH = Math.round(cardW * 1.447);
-  // Overlap agresif: makin banyak kartu, makin rapat
   const count = hand.length;
   const overlap = count <= 5 ? 20 : count <= 8 ? 28 : count <= 11 ? 34 : 38;
   const step = cardW - overlap;
-
+ 
   const SUIT_ORDER = { '♠': 0, '♥': 1, '♦': 2, '♣': 3 };
   const sortedIndices = hand
     .map((card, originalIdx) => ({ card, originalIdx }))
@@ -269,48 +269,44 @@ function MyHand({ hand, selectedCards, onCardClick, validIndices }) {
       const valB = b.card.rank === 'A' ? 14 : parseInt(b.card.rank) || { J: 11, Q: 12, K: 13 }[b.card.rank];
       return valA - valB;
     });
-
+ 
   const totalW = count > 1 ? cardW + (count - 1) * step : cardW;
-  // Arc: kartu tengah paling tinggi, tepi sedikit turun
-  const arcDepth = Math.min(count * 1.2, 10); // max 10px drop di tepi
-
+  const arcDepth = Math.min(count * 1.2, 10);
+ 
   return (
     <div style={{
       position: 'relative',
       width: totalW,
-      height: cardH + 38, // ruang untuk arc + naik saat dipilih
+      height: cardH + 38,
       flexShrink: 0,
     }}>
       {sortedIndices.map(({ card, originalIdx }, displayIdx) => {
         const isSelected = selectedCards.includes(originalIdx);
         const isValid = validIndices.includes(originalIdx);
-
-        // Arc curve: posisi relatif ke tengah (-1 sampai 1)
-        const mid = (count - 1) / 2;
-        const relPos = count > 1 ? (displayIdx - mid) / mid : 0;
-        // Kartu tepi turun, tengah naik
-        const arcY = relPos * relPos * arcDepth;
-        // Rotasi kecil mengikuti arc
-        const rotDeg = relPos * (count > 6 ? 3.5 : 2.5);
-
-        const translateY = isSelected
-          ? arcY - 12  // naik lebih tinggi saat dipilih
-          : arcY;
-
+ 
+        const translateY = isSelected ? -8.5 : 0;
+        const rotDeg = 0;
+ 
         return (
-          <div
-            key={originalIdx}
+          <motion.div
+            // ✅ layoutId pakai card.id (stabil & unik global), BUKAN index array
+            layoutId={card.id}
+            key={card.id}
             onClick={() => onCardClick(originalIdx)}
+            // ✅ Framer Motion animasikan posisi & rotasi otomatis lewat layout
+            initial={false}
+            animate={{
+              left: displayIdx * step,
+              y: translateY,
+              rotate: rotDeg,
+            }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
             style={{
               position: 'absolute',
-              left: displayIdx * step,
               bottom: 0,
-              transform: `translateY(${translateY}px) rotate(${rotDeg}deg)`,
               transformOrigin: 'bottom center',
               zIndex: 10 + displayIdx,
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
               cursor: 'pointer',
-              // Shadow melayang — lebih dalam saat dipilih
               filter: isSelected
                 ? 'drop-shadow(0px 8px 12px rgba(0,0,0,0.75)) drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                 : 'drop-shadow(0px 4px 6px rgba(0,0,0,0.6)) drop-shadow(0px 1px 2px rgba(0,0,0,0.4))',
@@ -323,7 +319,7 @@ function MyHand({ hand, selectedCards, onCardClick, validIndices }) {
               selected={isSelected}
               valid={isValid}
             />
-          </div>
+          </motion.div>
         );
       })}
     </div>
@@ -334,7 +330,15 @@ function MyHand({ hand, selectedCards, onCardClick, validIndices }) {
 // TableCard
 // ─────────────────────────────────────────────
 function TableCard({ card, faceDown = false, jokerIndex = 0 }) {
-  return <CardSprite card={card} width={36} faceDown={faceDown} jokerIndex={jokerIndex} />;
+  return (
+    <motion.div
+      layoutId={card.id}
+      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+      style={{ display: 'inline-block' }}
+    >
+      <CardSprite card={card} width={36} faceDown={faceDown} jokerIndex={jokerIndex} />
+    </motion.div>
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -692,6 +696,7 @@ useEffect(() => {
 
   // ── MAIN LAYOUT ──────────────────────────────────────────────────
   return (
+    <LayoutGroup>
     <div style={{
       width: '100vw',
       height: '100vh',
@@ -838,22 +843,27 @@ useEffect(() => {
                       return (
                         <div style={{ position: 'relative', width: totalW, height: cH + 4, flexShrink: 0 }}>
                           {son.cards.map((card, cardIdx) => (
-                            <div key={cardIdx} style={{
-                              position: 'absolute',
-                              left: cardIdx * step,
-                              top: 0,
-                              zIndex: cardIdx,
-                              // Kartu ujung kiri & kanan sedikit naik agar terlihat bisa di-extend
-                              filter: (cardIdx === 0 || cardIdx === sonCount - 1)
-                                ? 'drop-shadow(0 -2px 4px rgba(255,255,255,0.25))'
-                                : 'none',
-                            }}>
-                              <TableCard
+                            <motion.div
+                              key={card.id}
+                              layoutId={card.id}
+                              initial={false}
+                              animate={{ left: cardIdx * step, top: 0 }}
+                              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                              style={{
+                                position: 'absolute',
+                                zIndex: cardIdx,
+                                filter: (cardIdx === 0 || cardIdx === sonCount - 1)
+                                  ? 'drop-shadow(0 -2px 4px rgba(255,255,255,0.25))'
+                                  : 'none',
+                              }}
+                            >
+                              <CardSprite
                                 card={card}
+                                width={cW}
                                 faceDown={isFirstSonPhase && son.playerId !== myPlayer?.id}
                                 jokerIndex={cardIdx}
                               />
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       );
@@ -930,7 +940,6 @@ useEffect(() => {
                       {(() => {
                       const boxCount = box.cards.length;
                       const cW = 36;
-                      // BOX overlap lebih agresif — semua kartu sama rank, cukup lihat ujung
                       const overlap = boxCount <= 4 ? 20 : boxCount <= 6 ? 26 : 30;
                       const step = cW - overlap;
                       const totalW = boxCount > 1 ? cW + (boxCount - 1) * step : cW;
@@ -938,18 +947,24 @@ useEffect(() => {
                       return (
                         <div style={{ position: 'relative', width: totalW, height: cH + 4, flexShrink: 0 }}>
                           {box.cards.map((card, cardIdx) => (
-                            <div key={cardIdx} style={{
-                              position: 'absolute',
-                              left: cardIdx * step,
-                              top: 0,
-                              zIndex: cardIdx,
-                            }}>
-                              <TableCard
+                            <motion.div
+                              key={card.id}
+                              layoutId={card.id}
+                              initial={false}
+                              animate={{ left: cardIdx * step, top: 0 }}
+                              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                              style={{
+                                position: 'absolute',
+                                zIndex: cardIdx,
+                              }}
+                            >
+                              <CardSprite
                                 card={card}
+                                width={cW}
                                 faceDown={isFirstSonPhase && box.playerId !== myPlayer?.id}
                                 jokerIndex={cardIdx}
                               />
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       );
@@ -1349,5 +1364,6 @@ useEffect(() => {
             </div>
           )}
     </div>
+    </LayoutGroup>
   );
 }

@@ -40,7 +40,7 @@ export function CardSprite({
       onClick={onClick}
       className={`relative inline-block transition-all duration-150 select-none
         ${onClick ? 'cursor-pointer' : ''}
-        ${selected ? '-translate-y-4 drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]' : ''}
+        ${selected ? 'drop-shadow-[0_0_8px_rgba(250,204,21,0.9)]' : ''}
         
         ${className}
       `}
