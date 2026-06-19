@@ -222,26 +222,43 @@ export function GameProvider({ children, roomId, myUserId }) {
     },
 
     declareFailFirstSon: (playerIdx) => {
-      const currentPlayer = gameState?.players[playerIdx];
-      if (!currentPlayer?.isBot && !isMyTurn()) return;
-      const result = declareFailFirstSon(gameState, playerIdx);
-      if (!result.success) return;
+    const currentPlayer = gameState?.players[playerIdx];
+    if (!currentPlayer?.isBot && !isMyTurn()) return;
+    const result = declareFailFirstSon(gameState, playerIdx);
+    if (!result.success) return;
 
-      if (result.restart) {
-        const freshState = initializeGame(
-          gameState.players.map(p => ({
-            id: p.id,
-            name: p.name,
-            isBot: p.isBot || false,
-          })),
-          gameState.minusLimit
-        );
-        freshState.round = gameState.round;
-        syncToSupabase(freshState);
-      } else {
-        syncToSupabase(result.gameState);
-      }
-    },
+    if (result.restart) {
+      const freshState = initializeGame(
+        gameState.players.map(p => ({
+          id: p.id,
+          name: p.name,
+          isBot: p.isBot || false,
+        })),
+        gameState.minusLimit
+      );
+      freshState.round = gameState.round;
+
+      // ✅ FIX: pertahankan totalScore dari ronde sebelumnya
+      freshState.players.forEach((player, idx) => {
+        player.totalScore = gameState.players[idx].totalScore || 0;
+      });
+
+      // ✅ FIX: giliran pertama berdasarkan totalScore tertinggi, bukan index 0
+      let highestScoreIdx = 0;
+      let highestScore = freshState.players[0].totalScore;
+      freshState.players.forEach((player, idx) => {
+        if (player.totalScore > highestScore) {
+          highestScore = player.totalScore;
+          highestScoreIdx = idx;
+        }
+      });
+      freshState.currentTurnIdx = highestScoreIdx;
+
+      syncToSupabase(freshState);
+    } else {
+      syncToSupabase(result.gameState);
+    }
+  },
 
     nextRound: () => {
       const result = nextRound(gameState);

@@ -174,7 +174,8 @@ export function playCardToSon(gameState, playerIdx, cardIdx, sonIdx, position = 
   player.hand.splice(cardIdx, 1);
   gameState.history.push({ playerIdx, action: 'play_to_son', sonIdx, position, timestamp: Date.now() });
 
-  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+  // playCardToSon():
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx, [card]);
 
   advanceTurn(gameState);
   return { success: true, gameState };
@@ -304,7 +305,8 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
     timestamp: Date.now()
   });
 
-  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+  // playNewSon():
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx, cards);
 
   advanceTurn(gameState);
   return { success: true, gameState };
@@ -385,7 +387,8 @@ export function playNewBox(gameState, playerIdx, cardIndices) {
     timestamp: Date.now()
   });
 
-  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+  // playNewBox():
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx, cards);
 
   advanceTurn(gameState);
   return { success: true, gameState };
@@ -519,7 +522,8 @@ export function extendSon(gameState, playerIdx, cardIdx, sonIdx, position = 'rig
     timestamp: Date.now()
   });
 
-  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+  // extendSon():
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx, cards);
 
   advanceTurn(gameState);
   return { success: true, gameState };
@@ -586,7 +590,8 @@ export function addToBox(gameState, playerIdx, cardIndices, boxIdx) {
     timestamp: Date.now()
   });
 
-  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+  // addToBox():
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx, cards);
 
   advanceTurn(gameState);
   return { success: true, gameState };
@@ -648,13 +653,14 @@ export function playerPass(gameState, playerIdx) {
 /**
  * Handle CATE (pemain kartu habis)
  */
-function handleCate(gameState, playerIdx) {
+function handleCate(gameState, playerIdx, lastPlayedCards = []) {
   const player = gameState.players[playerIdx];
 
   player.status = 'cate';
   gameState.cateType = 'normal';
 
-  const jokerCount = player.hand.filter(c => c.isJoker).length;
+  // ✅ FIX: hitung joker dari kartu TERAKHIR yang dimainkan, bukan dari hand (sudah kosong)
+  const jokerCount = lastPlayedCards.filter(c => c.isJoker).length;
   const score = jokerCount > 0 ? jokerCount * 100 : 50;
   player.score = score;
 

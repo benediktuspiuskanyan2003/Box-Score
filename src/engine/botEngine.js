@@ -18,16 +18,31 @@ import {
 } from './cardValidator.js';
 
 // ─────────────────────────────────────────────
-// Helper: kombinasi
+// Time budget guard — supaya bot tidak freeze lama
 // ─────────────────────────────────────────────
-function getCombinations(arr, size) {
+const BOT_TIME_BUDGET_MS = 800; // total waktu maksimal bot mikir per giliran
+
+class TimeBudgetExceeded extends Error {}
+
+function checkBudget(deadline) {
+  if (Date.now() > deadline) {
+    throw new TimeBudgetExceeded();
+  }
+}
+// ─────────────────────────────────────────────
+// Helper: kombinasi — dengan limit & budget check
+// ─────────────────────────────────────────────
+function getCombinations(arr, size, deadline, maxResults = 2000) {
   const result = [];
   function combine(start, current) {
+    if (result.length >= maxResults) return; // ✅ stop kalau sudah kebanyakan
     if (current.length === size) {
       result.push([...current]);
       return;
     }
     for (let i = start; i < arr.length; i++) {
+      if (result.length >= maxResults) return;
+      checkBudget(deadline); // ✅ cek waktu tiap iterasi
       current.push(arr[i]);
       combine(i + 1, current);
       current.pop();
@@ -107,13 +122,15 @@ function countDeadCards(remainingHand, sons, boxes) {
 // ─────────────────────────────────────────────
 // Kumpulkan SEMUA opsi SON baru yang valid
 // ─────────────────────────────────────────────
-function collectSonOptions(hand, isFirstSon) {
+function collectSonOptions(hand, isFirstSon, deadline) {
   const options = [];
   const indices = hand.map((_, i) => i);
 
   for (let size = 3; size <= Math.min(13, hand.length); size++) {
-    const combos = getCombinations(indices, size);
+    checkBudget(deadline);
+    const combos = getCombinations(indices, size, deadline);
     for (const combo of combos) {
+      checkBudget(deadline);
       const cards = combo.map(idx => hand[idx]);
       if (isFirstSon && cards.some(c => c.isJoker)) continue;
 
@@ -137,7 +154,7 @@ function collectSonOptions(hand, isFirstSon) {
 // ─────────────────────────────────────────────
 // Kumpulkan SEMUA opsi BOX baru yang valid
 // ─────────────────────────────────────────────
-function collectBoxOptions(hand, existingBoxes, isFirstSon) {
+function collectBoxOptions(hand, existingBoxes, isFirstSon, deadline) {
   const options = [];
   const minCards = isFirstSon ? 5 : 3;
 
@@ -161,6 +178,7 @@ function collectBoxOptions(hand, existingBoxes, isFirstSon) {
     .map(({ idx }) => idx);
 
   for (const [rank, cardIndices] of Object.entries(byRank)) {
+    checkBudget(deadline);
     if (ranksInBoxes.has(rank)) continue;
 
     const availableJokers = isFirstSon ? [] : jokerIndices;
@@ -168,6 +186,7 @@ function collectBoxOptions(hand, existingBoxes, isFirstSon) {
     const maxJokerUsable = Math.min(availableJokers.length, maxTotal - cardIndices.length);
 
     for (let jokerUsed = 0; jokerUsed <= maxJokerUsable; jokerUsed++) {
+      checkBudget(deadline);
       const totalCount = cardIndices.length + jokerUsed;
       if (totalCount < minCards) continue;
       if (totalCount > 8) continue;
@@ -194,17 +213,19 @@ function collectBoxOptions(hand, existingBoxes, isFirstSon) {
 // ─────────────────────────────────────────────
 // Kumpulkan SEMUA opsi extend SON
 // ─────────────────────────────────────────────
-function collectExtendOptions(hand, sons, boxes) {
+function collectExtendOptions(hand, sons, boxes, deadline) {
   const options = [];
   const indices = hand.map((_, i) => i);
 
   for (let sonIdx = 0; sonIdx < sons.length; sonIdx++) {
+    checkBudget(deadline);
     const son = sons[sonIdx];
     if (son.cards.length >= 13) continue;
 
     for (let count = 1; count <= 2; count++) {
-      const combos = getCombinations(indices, count);
+      const combos = getCombinations(indices, count, deadline);
       for (const combo of combos) {
+        checkBudget(deadline);
         const cards = combo.map(idx => hand[idx]);
         const jokerCount = cards.filter(c => c.isJoker).length;
 
@@ -241,10 +262,11 @@ function collectExtendOptions(hand, sons, boxes) {
 // ─────────────────────────────────────────────
 // Kumpulkan SEMUA opsi add to BOX
 // ─────────────────────────────────────────────
-function collectAddToBoxOptions(hand, boxes) {
+function collectAddToBoxOptions(hand, boxes, deadline) {
   const options = [];
 
   for (let boxIdx = 0; boxIdx < boxes.length; boxIdx++) {
+    checkBudget(deadline);
     const box = boxes[boxIdx];
     const remainingSlot = 8 - box.cards.length;
     if (remainingSlot <= 0) continue;
@@ -259,8 +281,9 @@ function collectAddToBoxOptions(hand, boxes) {
 
     const maxAdd = Math.min(2, remainingSlot, matchingIndices.length);
     for (let count = 1; count <= maxAdd; count++) {
-      const combos = getCombinations(matchingIndices, count);
+      const combos = getCombinations(matchingIndices, count, deadline);
       for (const combo of combos) {
+        checkBudget(deadline);
         const cards = combo.map(idx => hand[idx]);
         const jokerCount = cards.filter(c => c.isJoker).length;
         options.push({
@@ -280,7 +303,8 @@ function collectAddToBoxOptions(hand, boxes) {
 // ─────────────────────────────────────────────
 // Scoring: hitung skor sebuah opsi
 // ─────────────────────────────────────────────
-function scoreOption(option, hand, sons, boxes, visibleCount) {
+function scoreOption(option, hand, sons, boxes, visibleCount, deadline) {
+  checkBudget(deadline);
   let score = 0;
 
   score += option.length * 10;
@@ -390,100 +414,231 @@ export function computeBotAction(gameState, botPlayerIdx) {
   const isFirstSon = gameState.phase === 'first_son';
   const alreadyDoneFirstSon = gameState.sonFirstCompleted?.includes(botPlayerIdx);
 
-  if (!isFirstSon) {
-    const cateMove = findCateMove(hand);
-    if (cateMove) return cateMove;
-  }
+  const deadline = Date.now() + BOT_TIME_BUDGET_MS; // ✅ batas waktu mikir
 
-  const sonOptions = collectSonOptions(hand, isFirstSon);
-  const boxOptions = collectBoxOptions(hand, boxes, isFirstSon);
-
-  if (isFirstSon && !alreadyDoneFirstSon) {
-    const allFirstSonOptions = [...sonOptions, ...boxOptions];
-    if (allFirstSonOptions.length === 0) {
-      return { type: 'fail_first_son' };
+  try {
+    if (!isFirstSon) {
+      const cateMove = findCateMove(hand);
+      if (cateMove) return cateMove;
     }
 
-    const visibleCount = buildVisibleCardCount(hand, sons, boxes);
-    let best = null;
-    let bestScore = -Infinity;
-    for (const opt of allFirstSonOptions) {
-      const s = scoreOption(opt, hand, sons, boxes, visibleCount);
-      if (s > bestScore) {
-        bestScore = s;
-        best = opt;
+    checkBudget(deadline);
+    const sonOptions = collectSonOptions(hand, isFirstSon, deadline);
+    checkBudget(deadline);
+    const boxOptions = collectBoxOptions(hand, boxes, isFirstSon, deadline);
+
+    if (isFirstSon && !alreadyDoneFirstSon) {
+      const allFirstSonOptions = [...sonOptions, ...boxOptions];
+      if (allFirstSonOptions.length === 0) {
+        return { type: 'fail_first_son' };
       }
-    }
 
-    if (best.type === 'new_son') {
-      return {
-        type: 'new_son',
-        cardIndices: best.cardIndices,
-        jokerPosition: resolveJokerPosition(best.cardIndices, hand),
-      };
-    }
-    return { type: 'new_box', cardIndices: best.cardIndices };
-  }
-
-  const extendOptions = collectExtendOptions(hand, sons, boxes);
-  const addOptions = collectAddToBoxOptions(hand, boxes);
-
-  const allOptions = [...sonOptions, ...boxOptions, ...extendOptions, ...addOptions];
-
-  if (allOptions.length > 0) {
-    const visibleCount = buildVisibleCardCount(hand, sons, boxes);
-    let best = null;
-    let bestScore = -Infinity;
-
-    for (const opt of allOptions) {
-      const s = scoreOption(opt, hand, sons, boxes, visibleCount);
-      if (s > bestScore) {
-        bestScore = s;
-        best = opt;
+      const visibleCount = buildVisibleCardCount(hand, sons, boxes);
+      let best = null;
+      let bestScore = -Infinity;
+      for (const opt of allFirstSonOptions) {
+        checkBudget(deadline);
+        const s = scoreOption(opt, hand, sons, boxes, visibleCount, deadline);
+        if (s > bestScore) {
+          bestScore = s;
+          best = opt;
+        }
       }
-    }
 
-    if (best.type === 'new_son') {
-      return {
-        type: 'new_son',
-        cardIndices: best.cardIndices,
-        jokerPosition: resolveJokerPosition(best.cardIndices, hand),
-      };
-    }
-
-    if (best.type === 'new_box') {
+      if (best.type === 'new_son') {
+        return {
+          type: 'new_son',
+          cardIndices: best.cardIndices,
+          jokerPosition: resolveJokerPosition(best.cardIndices, hand),
+        };
+      }
       return { type: 'new_box', cardIndices: best.cardIndices };
     }
 
-    if (best.type === 'extend_son') {
-      return {
-        type: 'extend_son',
-        cardIndices: best.cardIndices,
-        sonIdx: best.sonIdx,
-        position: best.position,
-      };
+    checkBudget(deadline);
+    const extendOptions = collectExtendOptions(hand, sons, boxes, deadline);
+    checkBudget(deadline);
+    const addOptions = collectAddToBoxOptions(hand, boxes, deadline);
+
+    const allOptions = [...sonOptions, ...boxOptions, ...extendOptions, ...addOptions];
+
+    if (allOptions.length > 0) {
+      const visibleCount = buildVisibleCardCount(hand, sons, boxes);
+      let best = null;
+      let bestScore = -Infinity;
+
+      for (const opt of allOptions) {
+        checkBudget(deadline);
+        const s = scoreOption(opt, hand, sons, boxes, visibleCount, deadline);
+        if (s > bestScore) {
+          bestScore = s;
+          best = opt;
+        }
+      }
+
+      return finalizeOption(best, hand);
     }
 
-    if (best.type === 'add_to_box') {
-      return {
-        type: 'add_to_box',
-        cardIndices: best.cardIndices,
-        boxIdx: best.boxIdx,
-      };
+    const jokerDumpIdx = findEndgameJokerDump(hand, sons, boxes);
+    if (jokerDumpIdx !== null) {
+      return { type: 'throw_joker', cardIdx: jokerDumpIdx };
+    }
+
+    for (let idx = 0; idx < hand.length; idx++) {
+      const card = hand[idx];
+      if (card.isJoker && !jokerHasValidUse(idx, hand, sons, boxes)) {
+        return { type: 'throw_joker', cardIdx: idx };
+      }
+    }
+
+    return { type: 'pass' };
+
+  } catch (err) {
+    if (err instanceof TimeBudgetExceeded) {
+      // ✅ FALLBACK: waktu habis — pakai strategi cepat & aman
+      console.warn(`[Bot] Time budget exceeded for player ${botPlayerIdx}, using fallback`);
+      return computeFallbackAction(gameState, botPlayerIdx);
+    }
+    // Error tak terduga lain — tetap fallback supaya game tidak macet
+    console.error('[Bot] Unexpected error:', err);
+    return computeFallbackAction(gameState, botPlayerIdx);
+  }
+}
+
+function finalizeOption(best, hand) {
+  if (!best) return { type: 'pass' };
+
+  if (best.type === 'new_son') {
+    return {
+      type: 'new_son',
+      cardIndices: best.cardIndices,
+      jokerPosition: resolveJokerPosition(best.cardIndices, hand),
+    };
+  }
+  if (best.type === 'new_box') {
+    return { type: 'new_box', cardIndices: best.cardIndices };
+  }
+  if (best.type === 'extend_son') {
+    return {
+      type: 'extend_son',
+      cardIndices: best.cardIndices,
+      sonIdx: best.sonIdx,
+      position: best.position,
+    };
+  }
+  if (best.type === 'add_to_box') {
+    return {
+      type: 'add_to_box',
+      cardIndices: best.cardIndices,
+      boxIdx: best.boxIdx,
+    };
+  }
+  return { type: 'pass' };
+}
+
+// ─────────────────────────────────────────────
+// FALLBACK: strategi cepat saat waktu habis
+// Tidak optimal, tapi DIJAMIN cepat (tidak ada kombinatorial)
+// ─────────────────────────────────────────────
+function computeFallbackAction(gameState, botPlayerIdx) {
+  const bot = gameState.players[botPlayerIdx];
+  const hand = bot.hand;
+  const sons = gameState.meja.sons;
+  const boxes = gameState.meja.boxes;
+  const isFirstSon = gameState.phase === 'first_son';
+  const alreadyDoneFirstSon = gameState.sonFirstCompleted?.includes(botPlayerIdx);
+
+  // 1. Coba extend SON dengan 1 kartu (paling murah, O(n*m))
+  if (!isFirstSon || alreadyDoneFirstSon) {
+    for (let cardIdx = 0; cardIdx < hand.length; cardIdx++) {
+      const card = hand[cardIdx];
+      for (let sonIdx = 0; sonIdx < sons.length; sonIdx++) {
+        const son = sons[sonIdx];
+        if (canExtendSonMultiple(son.cards, [card], 'left', boxes).valid) {
+          return { type: 'extend_son', cardIndices: [cardIdx], sonIdx, position: 'left' };
+        }
+        if (canExtendSonMultiple(son.cards, [card], 'right', boxes).valid) {
+          return { type: 'extend_son', cardIndices: [cardIdx], sonIdx, position: 'right' };
+        }
+      }
+    }
+
+    // 2. Coba add to box dengan 1 kartu
+    for (let cardIdx = 0; cardIdx < hand.length; cardIdx++) {
+      const card = hand[cardIdx];
+      for (let boxIdx = 0; boxIdx < boxes.length; boxIdx++) {
+        const box = boxes[boxIdx];
+        if (box.cards.length >= 8) continue;
+        const boxRank = box.cards.find(c => !c.isJoker)?.rank;
+        if (card.rank === boxRank || card.isJoker) {
+          return { type: 'add_to_box', cardIndices: [cardIdx], boxIdx };
+        }
+      }
     }
   }
 
-  const jokerDumpIdx = findEndgameJokerDump(hand, sons, boxes);
-  if (jokerDumpIdx !== null) {
-    return { type: 'throw_joker', cardIdx: jokerDumpIdx };
+  // 3. Coba cari SON baru sederhana: ambil 3 kartu suit sama berurutan
+  const minSonLen = isFirstSon ? 3 : 3;
+  const bySuit = { '♠': [], '♥': [], '♦': [], '♣': [] };
+  hand.forEach((card, idx) => {
+    if (!card.isJoker) bySuit[card.suit].push({ idx, card });
+  });
+
+  for (const suit in bySuit) {
+    const cards = bySuit[suit];
+    if (cards.length < minSonLen) continue;
+    const sorted = [...cards].sort((a, b) => getCardValue(a.card.rank) - getCardValue(b.card.rank));
+    for (let start = 0; start <= sorted.length - 3; start++) {
+      const slice = sorted.slice(start, start + 3);
+      const testCards = slice.map(s => s.card);
+      if (isFirstSon && testCards.some(c => c.isJoker)) continue;
+      if (isValidSon(testCards).valid) {
+        return {
+          type: 'new_son',
+          cardIndices: slice.map(s => s.idx),
+          jokerPosition: 'auto',
+        };
+      }
+    }
   }
 
+  // 4. Coba cari BOX baru sederhana: 3+ kartu rank sama
+  const minBoxLen = isFirstSon ? 5 : 3;
+  const byRank = {};
+  hand.forEach((card, idx) => {
+    if (!card.isJoker) {
+      if (!byRank[card.rank]) byRank[card.rank] = [];
+      byRank[card.rank].push(idx);
+    }
+  });
+  const ranksInBoxes = new Set(
+    boxes.flatMap(box => box.cards.filter(c => !c.isJoker).map(c => c.rank))
+  );
+  for (const [rank, indices] of Object.entries(byRank)) {
+    if (ranksInBoxes.has(rank)) continue;
+    if (indices.length >= minBoxLen) {
+      return { type: 'new_box', cardIndices: indices.slice(0, minBoxLen) };
+    }
+  }
+
+  // 5. Fase first_son dan tidak ketemu apa-apa → gagal son
+  if (isFirstSon && !alreadyDoneFirstSon) {
+    return { type: 'fail_first_son' };
+  }
+
+  // 6. Buang joker kalau ada (tanpa cek valid use, asal aman dibuang di endgame)
   for (let idx = 0; idx < hand.length; idx++) {
-    const card = hand[idx];
-    if (card.isJoker && !jokerHasValidUse(idx, hand, sons, boxes)) {
-      return { type: 'throw_joker', cardIdx: idx };
+    if (hand[idx].isJoker) {
+      const stillUseful = sons.some(son =>
+        canExtendSonMultiple(son.cards, [hand[idx]], 'left', boxes).valid ||
+        canExtendSonMultiple(son.cards, [hand[idx]], 'right', boxes).valid
+      );
+      if (!stillUseful) {
+        return { type: 'throw_joker', cardIdx: idx };
+      }
     }
   }
 
+  // 7. Tidak ada pilihan lain → pass
   return { type: 'pass' };
 }
