@@ -76,6 +76,28 @@ function getInitials(name) {
 // ─────────────────────────────────────────────
 function PlayerAvatar({ player, isActive, size = 36 }) {
   const color = getAvatarColor(player?.name);
+
+  // Kalau ada foto profil, tampilkan foto
+  if (player?.profilePicture) {
+    return (
+      <img
+        src={player.profilePicture}
+        alt={player.name}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          objectFit: 'cover',
+          border: isActive ? '2.5px solid #f5c842' : '2px solid rgba(255,255,255,0.15)',
+          boxShadow: isActive ? '0 0 10px 3px rgba(245,200,66,0.55)' : 'none',
+          flexShrink: 0,
+          transition: 'box-shadow 0.3s, border-color 0.3s',
+        }}
+      />
+    );
+  }
+
+  // Kalau tidak ada foto (misal bot, atau user belum upload foto), tampilkan inisial seperti biasa
   return (
     <div style={{
       width: size,
@@ -361,6 +383,7 @@ function PlayGameContent() {
   const [extendableCardsDefault, setExtendableCardsDefault] = useState([]);
   const [addableCardsDefault, setAddableCardsDefault] = useState([]);
   const [jokerPositionChoice, setJokerPositionChoice] = useState(null);
+  const [jokerLeftCount, setJokerLeftCount] = useState(0);
   const [throwableJokers, setThrowableJokers] = useState([]);
   const navigate = useNavigate();
 
@@ -378,6 +401,11 @@ function PlayGameContent() {
     navigate('/home');
   }
 }, [gameState, myPlayerIdx, loadingGame]);
+
+function getCardValueLocal(rank) {
+  const values = { A: 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, J: 11, Q: 12, K: 13 };
+  return values[rank] || 0;
+}
 
   const [showRanking, setShowRanking] = useState(false);
 
@@ -491,7 +519,7 @@ useEffect(() => {
 
     switch (action.type) {
       case 'new_son':
-        playNewSon(botIdx, action.cardIndices, action.jokerPosition || 'auto');
+        playNewSon(botIdx, action.cardIndices, action.jokerPosition || null);
         break;
       case 'new_box':
         playNewBox(botIdx, action.cardIndices);
@@ -530,11 +558,37 @@ useEffect(() => {
     if (selectedCards.length > 5) return alert('SON baru maksimal 5 kartu');
     const selectedCardObjects = selectedCards.map(idx => myHand[idx]);
     const hasJoker = selectedCardObjects.some(c => c.isJoker);
+  
     if (hasJoker && gameState.phase !== 'first_son') {
-      const { ambiguous, options } = detectSonJokerAmbiguity(selectedCardObjects);
-      if (ambiguous) { setJokerPositionChoice({ cardIndices: selectedCards, options }); return; }
+      const ambiguity = detectSonJokerAmbiguity(selectedCardObjects);
+  
+      if (ambiguity.invalid) {
+        return alert('Kombinasi kartu ini tidak bisa membentuk SON yang valid');
+      }
+  
+      // Ada pilihan edge split (lebih dari 1 cara valid menaruh sisa joker)
+      if (ambiguity.ambiguous) {
+        setJokerPositionChoice({
+          cardIndices: selectedCards,
+          ...ambiguity,
+        });
+        setJokerLeftCount(ambiguity.minLeft); // nilai awal slider
+        return;
+      }
+  
+      // ✅ FIX: tidak ambiguous TAPI tetap ada sisa joker yang harus ditaruh
+      // di posisi spesifik (minLeft === maxLeft, cuma 1 cara valid).
+      // Kirim ambiguity.minLeft, JANGAN kirim null, karena null akan
+      // di-default ke 0 di gameEngine.js yang bisa salah arah.
+      if (ambiguity.edgeJokerCount > 0) {
+        playNewSon(myPlayerIdx, selectedCards, ambiguity.minLeft);
+        setSelectedCards([]); setAction(null);
+        return;
+      }
     }
-    playNewSon(myPlayerIdx, selectedCards);
+  
+    // Tidak ada joker, atau gap-only (tidak ada sisa joker edge)
+    playNewSon(myPlayerIdx, selectedCards, null);
     setSelectedCards([]); setAction(null);
   };
 
@@ -1235,59 +1289,98 @@ useEffect(() => {
 
       {/* ── Dialog Posisi Joker ── */}
       {jokerPositionChoice && (
-        <div style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.75)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 50,
-        }}>
-          <div style={{
-            background: '#1e293b',
-            border: '2px solid #f5c842',
-            borderRadius: 16,
-            padding: 20,
-            maxWidth: 280,
-            width: '90%',
-          }}>
-            <div style={{ color: '#fde68a', fontWeight: 700, textAlign: 'center', marginBottom: 12 }}>
-              🃏 Posisi Joker?
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {jokerPositionChoice.options.includes('kiri') && (
-                <button
-                  onClick={() => { playNewSon(myPlayerIdx, jokerPositionChoice.cardIndices, 'kiri'); setJokerPositionChoice(null); setSelectedCards([]); setAction(null); }}
-                  style={{ background: '#1d4ed8', color: '#fff', fontWeight: 700, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14 }}
-                >
-                  ← Joker di Kiri
-                </button>
-              )}
-              {jokerPositionChoice.options.includes('gap') && (
-                <button
-                  onClick={() => { playNewSon(myPlayerIdx, jokerPositionChoice.cardIndices, 'gap'); setJokerPositionChoice(null); setSelectedCards([]); setAction(null); }}
-                  style={{ background: '#6d28d9', color: '#fff', fontWeight: 700, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14 }}
-                >
-                  ↕ Joker di Tengah
-                </button>
-              )}
-              {jokerPositionChoice.options.includes('kanan') && (
-                <button
-                  onClick={() => { playNewSon(myPlayerIdx, jokerPositionChoice.cardIndices, 'kanan'); setJokerPositionChoice(null); setSelectedCards([]); setAction(null); }}
-                  style={{ background: '#15803d', color: '#fff', fontWeight: 700, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14 }}
-                >
-                  Joker di Kanan →
-                </button>
-              )}
-              <button
-                onClick={() => setJokerPositionChoice(null)}
-                style={{ background: 'rgba(255,255,255,0.08)', color: '#999', padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13 }}
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-          
-        </div>
-      )}
+  <div style={{
+    position: 'fixed', inset: 0,
+    background: 'rgba(0,0,0,0.75)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 50,
+  }}>
+    <div style={{
+      background: '#1e293b',
+      border: '2px solid #f5c842',
+      borderRadius: 16,
+      padding: 20,
+      maxWidth: 300,
+      width: '90%',
+    }}>
+      <div style={{ color: '#fde68a', fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>
+        🃏 Posisi Joker
+      </div>
+      <div style={{ color: '#cbd5e1', fontSize: 12, textAlign: 'center', marginBottom: 16 }}>
+        {jokerPositionChoice.edgeJokerCount} Joker tersisa setelah isi celah.
+        Atur berapa yang ditaruh di kiri.
+      </div>
+ 
+      {/* Preview hasil susunan */}
+      <div style={{
+        background: 'rgba(0,0,0,0.3)',
+        borderRadius: 8,
+        padding: '10px 8px',
+        textAlign: 'center',
+        marginBottom: 16,
+        color: '#fff',
+        fontWeight: 700,
+        fontSize: 14,
+        letterSpacing: 1,
+      }}>
+        {'🃏'.repeat(jokerLeftCount)}
+        {jokerLeftCount > 0 ? ' ' : ''}
+        [{jokerPositionChoice.cardIndices
+          .map(idx => myHand[idx])
+          .filter(c => !c.isJoker)
+          .sort((a, b) => getCardValueLocal(a.rank) - getCardValueLocal(b.rank))
+          .map(c => c.rank).join('-')}]
+        {jokerPositionChoice.edgeJokerCount - jokerLeftCount > 0 ? ' ' : ''}
+        {'🃏'.repeat(jokerPositionChoice.edgeJokerCount - jokerLeftCount)}
+      </div>
+ 
+      {/* Slider jumlah joker kiri */}
+      <div style={{ marginBottom: 8 }}>
+        <input
+          type="range"
+          min={jokerPositionChoice.minLeft}
+          max={jokerPositionChoice.maxLeft}
+          value={jokerLeftCount}
+          onChange={(e) => setJokerLeftCount(parseInt(e.target.value))}
+          style={{ width: '100%' }}
+        />
+      </div>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        color: '#94a3b8', fontSize: 11, marginBottom: 16,
+      }}>
+        <span>← Kiri: {jokerLeftCount}</span>
+        <span>Kanan: {jokerPositionChoice.edgeJokerCount - jokerLeftCount} →</span>
+      </div>
+ 
+      <button
+        onClick={() => {
+          playNewSon(myPlayerIdx, jokerPositionChoice.cardIndices, jokerLeftCount);
+          setJokerPositionChoice(null);
+          setSelectedCards([]);
+          setAction(null);
+        }}
+        style={{
+          width: '100%', background: '#15803d', color: '#fff',
+          fontWeight: 700, padding: '10px 0', borderRadius: 8,
+          border: 'none', cursor: 'pointer', fontSize: 14, marginBottom: 8,
+        }}
+      >
+        ✓ Konfirmasi
+      </button>
+      <button
+        onClick={() => setJokerPositionChoice(null)}
+        style={{
+          width: '100%', background: 'rgba(255,255,255,0.08)', color: '#999',
+          padding: '8px 0', borderRadius: 8, border: 'none',
+          cursor: 'pointer', fontSize: 13,
+        }}
+      >
+        Batal
+      </button>
+    </div>
+  </div>
+)}
       {/* ── Dialog Ranking Sementara ── */}
           {showRanking && (
             <div

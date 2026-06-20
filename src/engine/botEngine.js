@@ -374,10 +374,11 @@ function findCateMove(hand) {
   if (hand.length >= 3 && hand.length <= 13) {
     const validation = isValidSon(hand);
     if (validation.valid) {
+      const allIndices = hand.map((_, idx) => idx);
       return {
         type: 'new_son',
-        cardIndices: hand.map((_, idx) => idx),
-        jokerPosition: 'auto',
+        cardIndices: allIndices,
+        jokerLeftCount: resolveJokerLeftCount(allIndices, hand),
       };
     }
   }
@@ -387,18 +388,21 @@ function findCateMove(hand) {
 // ─────────────────────────────────────────────
 // Helper: pilih jokerPosition untuk new_son
 // ─────────────────────────────────────────────
-function resolveJokerPosition(cardIndices, hand) {
+function resolveJokerLeftCount(cardIndices, hand) {
   const sonCards = cardIndices.map(idx => hand[idx]);
   const hasJoker = sonCards.some(c => c.isJoker);
-  if (!hasJoker) return 'auto';
-
-  const { ambiguous, options } = detectSonJokerAmbiguity(sonCards);
-  if (ambiguous && options.length > 0) {
-    if (options.includes('gap')) return 'gap';
-    if (options.includes('kanan')) return 'kanan';
-    return options[0];
-  }
-  return 'auto';
+  if (!hasJoker) return null;
+ 
+  const result = detectSonJokerAmbiguity(sonCards);
+ 
+  if (result.invalid) return null; // seharusnya tidak terjadi kalau opsi sudah divalidasi isValidSon sebelumnya
+ 
+  if (result.edgeJokerCount === 0) return null; // tidak ada sisa joker, gap-only
+ 
+  // Bot strategy: pilih minLeft (cenderung taruh joker di kanan/sisi yang
+  // lebih jarang dipakai pemain lain) -- konsisten dengan strategi lama
+  // yang prioritaskan 'kanan' dulu sebelum 'kiri'.
+  return result.minLeft;
 }
 
 // ─────────────────────────────────────────────
@@ -447,9 +451,9 @@ export function computeBotAction(gameState, botPlayerIdx) {
 
       if (best.type === 'new_son') {
         return {
-          type: 'new_son',
-          cardIndices: best.cardIndices,
-          jokerPosition: resolveJokerPosition(best.cardIndices, hand),
+         type: 'new_son',
+         cardIndices: best.cardIndices,
+         jokerLeftCount: resolveJokerLeftCount(best.cardIndices, hand),
         };
       }
       return { type: 'new_box', cardIndices: best.cardIndices };
@@ -509,12 +513,12 @@ function finalizeOption(best, hand) {
   if (!best) return { type: 'pass' };
 
   if (best.type === 'new_son') {
-    return {
-      type: 'new_son',
-      cardIndices: best.cardIndices,
-      jokerPosition: resolveJokerPosition(best.cardIndices, hand),
-    };
-  }
+     return {
+       type: 'new_son',
+       cardIndices: best.cardIndices,
+       jokerLeftCount: resolveJokerLeftCount(best.cardIndices, hand),
+     };
+   }
   if (best.type === 'new_box') {
     return { type: 'new_box', cardIndices: best.cardIndices };
   }

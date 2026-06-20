@@ -159,6 +159,7 @@ const handleRemoveBot = async (botId) => {
   id: p.user_id,
   name: p.users?.display_name || 'Unknown',
   isBot: false,
+  profilePicture: p.users?.profile_picture_url || null,
   }));
 
   const botPlayers = bots.map(bot => ({

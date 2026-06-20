@@ -13,30 +13,41 @@ import { getCardValue } from './deckManager.js';
 /**
  * Check apakah kartu bisa membuat SON yang valid
  * @param {Array} cards - Kartu yang dipilih
- * @returns {Object} { valid: boolean, reason: string, aPosition: string }
+ * @returns {Object}
+ *   {
+ *     ambiguous: boolean,        // true kalau ada >1 cara penempatan sisa joker
+ *     gapJokerCount: number,     // berapa joker WAJIB dipakai isi gap tengah
+ *     edgeJokerCount: number,    // sisa joker yang punya pilihan kiri/kanan
+ *     minLeft: number,           // minimum joker edge yang boleh ditaruh di kiri
+ *     maxLeft: number,           // maximum joker edge yang boleh ditaruh di kiri
+ *     options: Array             // ['gap'] kalau ambiguous lama dipakai di tempat lain,
+ *                                 // dipertahankan untuk kompatibilitas kode yang sudah ada
+ *   }
  */
 export function isValidSon(cards) {
   if (!Array.isArray(cards) || cards.length < 3 || cards.length > 13) {
     return { valid: false, reason: `Son harus 3-13 kartu, dapat ${cards.length}` };
   }
-
+ 
   const jokers = cards.filter(c => c.isJoker);
   const nonJokers = cards.filter(c => !c.isJoker);
-
-  if (nonJokers.length === 0) {
-    return { valid: false, reason: 'Son harus ada minimal 1 kartu non-Joker' };
+ 
+  // ✅ FIX: minimal 2 kartu non-Joker, bukan 1.
+  // Mencegah SON yang terlalu didominasi Joker seperti "6-Joker-Joker".
+  if (nonJokers.length < 2) {
+    return { valid: false, reason: 'Son harus ada minimal 2 kartu non-Joker' };
   }
-
+ 
   const firstSuit = nonJokers[0].suit;
   if (!nonJokers.every(c => c.suit === firstSuit)) {
     return { valid: false, reason: 'Semua kartu di Son harus simbol sama' };
   }
-
+ 
   const isValid = isConsecutiveWithJokers(nonJokers, jokers.length);
   if (!isValid.valid) {
     return isValid;
   }
-
+ 
   return { valid: true, aPosition: isValid.aPosition };
 }
 
@@ -124,24 +135,63 @@ function checkConsecutive(values, jokerCount, aPosition) {
   if (unique.length !== values.length) {
     return { valid: false, aPosition, reason: 'Tidak boleh ada kartu rank yang sama dalam SON' };
   }
-
+ 
   const sorted = [...unique].sort((a, b) => a - b);
-
+ 
   if (sorted.length === 1) {
-    return { valid: false, aPosition };
+    // Cuma 1 nonJoker + sisanya joker semua di salah satu/kedua sisi.
+    // Selalu bisa valid asal total panjang <= 13 dan tidak keluar batas rank.
+    const totalLength = 1 + jokerCount;
+    if (totalLength > 13) return { valid: false, aPosition };
+    // Batas rank: minimal value setelah extend kiri sejauh mungkin harus >= batas bawah,
+    // ATAU maksimal value setelah extend kanan sejauh mungkin harus <= batas atas.
+    // Karena joker sisa bisa didistribusikan kiri/kanan secara bebas, selama jokerCount
+    // tidak melebihi total slot yang tersedia di kedua sisi gabungan, ini valid.
+    const lowerBound = 1; // rank terkecil adalah A=1, lalu 2,3,...
+    const upperBound = 14; // joker boleh jadi A(14) di ujung kanan, tidak bergantung aPosition
+    const maxSlotsAvailable = (sorted[0] - lowerBound) + (upperBound - sorted[0]);
+    if (jokerCount > maxSlotsAvailable) return { valid: false, aPosition };
+    return { valid: true, aPosition };
   }
-
+ 
   const min = sorted[0];
   const max = sorted[sorted.length - 1];
   const expectedLength = max - min + 1;
-  const gaps = expectedLength - sorted.length;
-
-  const totalCardsUsed = sorted.length + jokerCount;
-  if (gaps <= jokerCount && expectedLength <= 13 && totalCardsUsed === expectedLength) {
-    return { valid: true, aPosition };
+  const gapJokerCount = expectedLength - sorted.length; // gap WAJIB di tengah
+ 
+  if (gapJokerCount > jokerCount) {
+    return { valid: false, aPosition }; // tidak cukup joker untuk isi gap wajib
   }
-
-  return { valid: false, aPosition };
+  if (expectedLength > 13) {
+    return { valid: false, aPosition };
+  }
+ 
+  // Sisa joker setelah isi gap wajib
+  const edgeJokerCount = jokerCount - gapJokerCount;
+ 
+  if (edgeJokerCount === 0) {
+    return { valid: true, aPosition }; // pas, tidak ada sisa
+  }
+ 
+  // Sisa joker harus bisa didistribusikan ke kiri dan/atau kanan
+  // tanpa keluar batas rank, dan total panjang akhir tetap <= 13.
+  const lowerBound = 1; // rank terkecil adalah A=1
+  const upperBound = 14; // joker boleh jadi A(14) di ujung kanan
+ 
+  const maxLeftSlots = min - lowerBound;   // slot tersedia di kiri sebelum keluar batas
+  const maxRightSlots = upperBound - max;  // slot tersedia di kanan sebelum keluar batas
+  const maxSlotsAvailable = maxLeftSlots + maxRightSlots;
+ 
+  const finalLength = expectedLength + edgeJokerCount;
+ 
+  if (edgeJokerCount > maxSlotsAvailable) {
+    return { valid: false, aPosition }; // sisa joker tidak ada tempat valid
+  }
+  if (finalLength > 13) {
+    return { valid: false, aPosition };
+  }
+ 
+  return { valid: true, aPosition };
 }
 
 /**
@@ -186,51 +236,108 @@ function getJokerOccupiedValues(sonCards) {
 export function detectSonJokerAmbiguity(cards) {
   const jokers = cards.filter(c => c.isJoker);
   const nonJokers = cards.filter(c => !c.isJoker);
-
+ 
   if (jokers.length === 0) {
-    return { ambiguous: false, options: [] };
+    return { ambiguous: false, options: [], gapJokerCount: 0, edgeJokerCount: 0, minLeft: 0, maxLeft: 0 };
   }
-
+ 
   const sorted = [...nonJokers].sort((a, b) => getCardValue(a.rank) - getCardValue(b.rank));
-  const values = sorted.map(c => getCardValue(c.rank));
-
+  let values = sorted.map(c => getCardValue(c.rank));
+ 
   if (values.length === 0) {
-    return { ambiguous: false, options: [] };
+    return { ambiguous: false, options: [], gapJokerCount: 0, edgeJokerCount: 0, minLeft: 0, maxLeft: 0 };
   }
-
-  const minVal = values[0];
-  const maxVal = values[values.length - 1];
-  const range = maxVal - minVal + 1;
-  const gaps = range - values.length;
-
-  const options = [];
-
-  // Cek apakah joker bisa mengisi gap di tengah
-  if (gaps > 0 && gaps <= jokers.length) {
-    options.push('gap');
-  }
-
+ 
+  // Handle A sebagai 14 kalau ada kartu tinggi (J/Q/K) tanpa kartu rendah (3-7)
+  // Konsisten dengan logic isConsecutiveWithJokers yang sudah ada.
   const hasAce = values.includes(1);
-  // Sisa joker setelah isi gap tengah
-  const jokerCountAfterGap = Math.max(0, jokers.length - gaps);
-
-  if (gaps === 0 || jokerCountAfterGap > 0) {
-    const jokersForEdge = gaps === 0 ? jokers.length : jokerCountAfterGap;
-
-    // Bisa extend kiri: nilai minimum setelah extend >= 3 (atau 1 jika ada A)
-    const leftMin = minVal - jokersForEdge;
-    const canExtendLeft = hasAce ? leftMin >= 1 : leftMin >= 3;
-
-    // Bisa extend kanan: nilai maksimum setelah extend <= 14 (A)
-    const rightMax = maxVal + jokersForEdge;
-    const canExtendRight = rightMax <= 14;
-
-    if (canExtendLeft) options.push('kiri');
-    if (canExtendRight) options.push('kanan');
+  const hasHighCards = values.some(v => v >= 11);
+  const hasLowCards = values.some(v => v >= 3 && v <= 7);
+  let aceAsHigh = false;
+  if (hasAce && hasHighCards && !hasLowCards) {
+    values = values.map(v => (v === 1 ? 14 : v));
+    aceAsHigh = true;
   }
-
-  const ambiguous = options.length > 1;
-  return { ambiguous, options };
+ 
+  const sortedUnique = [...new Set(values)].sort((a, b) => a - b);
+  const minVal = sortedUnique[0];
+  const maxVal = sortedUnique[sortedUnique.length - 1];
+ 
+  // ── Hitung gap WAJIB di tengah (antar nonJoker yang sudah dipilih) ──
+  // Setiap slot kosong antara minVal..maxVal yang belum terisi nonJoker
+  // adalah gap yang WAJIB diisi joker.
+  const filledSlots = new Set(sortedUnique);
+  let gapJokerCount = 0;
+  for (let v = minVal; v <= maxVal; v++) {
+    if (!filledSlots.has(v)) gapJokerCount++;
+  }
+ 
+  // Tidak cukup joker untuk isi gap wajib -> kombinasi ini tidak valid sama sekali
+  // (seharusnya sudah divalidasi sebelumnya oleh isValidSon, tapi dijaga di sini juga)
+  if (gapJokerCount > jokers.length) {
+    return { ambiguous: false, options: [], gapJokerCount, edgeJokerCount: 0, minLeft: 0, maxLeft: 0, invalid: true };
+  }
+ 
+  // ── Sisa joker setelah gap wajib terisi -> kandidat untuk edge (kiri/kanan) ──
+  const edgeJokerCount = jokers.length - gapJokerCount;
+ 
+  if (edgeJokerCount === 0) {
+    // Tidak ada sisa joker, tidak ada pilihan apapun -> langsung valid otomatis
+    return {
+      ambiguous: false,
+      options: [],
+      gapJokerCount,
+      edgeJokerCount: 0,
+      minLeft: 0,
+      maxLeft: 0,
+    };
+  }
+ 
+  // ── Tentukan range jumlah joker edge yang boleh ditaruh di KIRI ──
+  // Untuk setiap kemungkinan leftCount (0..edgeJokerCount), cek apakah
+  // hasil akhir (kiri & kanan) masih dalam batas valid:
+  //   - sisi kiri: minVal - leftCount >= 3 (atau >= 1 kalau aceAsLow di slot itu, jarang terjadi di edge kiri karena A selalu plg kecil)
+  //   - sisi kanan: maxVal + rightCount <= 14 (kalau aceAsHigh, maxVal sudah 14 jadi rightCount harus 0)
+  let minLeft = 0;
+  let maxLeft = 0;
+  let found = false;
+ 
+  for (let leftCount = 0; leftCount <= edgeJokerCount; leftCount++) {
+    const rightCount = edgeJokerCount - leftCount;
+    const newMin = minVal - leftCount;
+    const newMax = maxVal + rightCount;
+ 
+    // Batas bawah: rank terkecil adalah A=1, lalu 2,3,...
+    const lowerBoundOk = newMin >= 1;
+    // Batas atas: joker boleh merepresentasikan A(14) di ujung kanan,
+    // jadi batas atas selalu 14 -- TIDAK bergantung pada aceAsHigh
+    // (aceAsHigh hanya relevan kalau ada kartu A ASLI di tangan yang sudah dipilih)
+    const upperBoundOk = newMax <= 14;
+ 
+    if (lowerBoundOk && upperBoundOk) {
+      if (!found) {
+        minLeft = leftCount;
+        found = true;
+      }
+      maxLeft = leftCount;
+    }
+  }
+ 
+  if (!found) {
+    // Tidak ada kombinasi edge yang valid sama sekali
+    return { ambiguous: false, options: [], gapJokerCount, edgeJokerCount, minLeft: 0, maxLeft: 0, invalid: true };
+  }
+ 
+  const ambiguous = maxLeft > minLeft; // ada lebih dari 1 pilihan leftCount yang valid
+ 
+  return {
+    ambiguous,
+    options: ambiguous ? ['edge_split'] : [], // dipertahankan supaya kode lama yang cek options.length tidak crash
+    gapJokerCount,
+    edgeJokerCount,
+    minLeft,
+    maxLeft,
+  };
 }
 
 /**
@@ -376,11 +483,17 @@ export function canExtendSonMultiple(sonCards, playCards, position, boxes = []) 
   // Rule 1: Single card extend
   if (playCardsCount === 1) {
     const card = playCards[0];
-
+ 
+    // ✅ FIX: cek isRankInBoxes untuk SEMUA kartu (joker maupun non-joker),
+    // bukan cuma joker. Rank yang sudah diklaim BOX tidak boleh extend SON
+    // sendirian -- baik itu kartu asli maupun joker yang merepresentasikan rank itu.
+    if (!card.isJoker && isRankInBoxes(card.rank, boxes)) {
+      return { valid: false, reason: `Rank ${card.rank} sudah ada di BOX, tidak bisa extend sendiri` };
+    }
     if (card.isJoker && isRankInBoxes(card.rank, boxes)) {
       return { valid: false, reason: `Rank ${card.rank} sudah ada di BOX, tidak bisa extend sendiri` };
     }
-
+ 
     const cardValue = getCardValue(card.rank);
     if (jokerOccupied.has(cardValue)) {
       return { valid: false, reason: `Slot rank ${card.rank} sudah diisi Joker di Son ini` };
@@ -474,20 +587,42 @@ export function canExtendSonMultiple(sonCards, playCards, position, boxes = []) 
     }
 
     if (nonJokers.length === 2) {
-      const val1 = getCardValue(nonJokers[0].rank);
-      const val2 = getCardValue(nonJokers[1].rank);
-      const sorted = [val1, val2].sort((a, b) => a - b);
-
-      if (sorted[1] - sorted[0] !== 1) {
-        return { valid: false, reason: 'Dua kartu harus berurutan' };
-      }
+    // ✅ FIX: kalau salah satu kartu adalah A dan kartu lainnya K,
+    // A harus dihitung sebagai 14 (bukan 1), karena A-setelah-K hanya
+    // make sense sebagai 13-14, tidak pernah sebagai 1-13.
+    const hasAce = nonJokers.some(c => c.rank === 'A');
+    const hasKing = nonJokers.some(c => c.rank === 'K');
+ 
+    const getValueForPair = (card) => {
+      if (card.rank === 'A' && hasKing) return 14;
+      return getCardValue(card.rank);
+    };
+ 
+    const val1 = getValueForPair(nonJokers[0]);
+    const val2 = getValueForPair(nonJokers[1]);
+    const sorted = [val1, val2].sort((a, b) => a - b);
+ 
+    if (sorted[1] - sorted[0] !== 1) {
+      return { valid: false, reason: 'Dua kartu harus berurutan' };
     }
+  }
 
     const sonFirst = sonCards[0];
     const sonLast = sonCards[sonCards.length - 1];
-    const firstPlayValue = getCardValue(nonJokers[0].rank);
+ 
+    // ✅ FIX: pakai getValueForPair juga di sini supaya A=14 konsisten
+    // (hasKing sudah dihitung di atas, scope-nya tetap terjangkau di sini
+    //  karena masih dalam blok if (playCardsCount === 2) yang sama)
+    const hasAceForPosition = nonJokers.some(c => c.rank === 'A');
+    const hasKingForPosition = nonJokers.some(c => c.rank === 'K');
+    const getValForPosition = (card) => {
+      if (card.rank === 'A' && hasKingForPosition) return 14;
+      return getCardValue(card.rank);
+    };
+ 
+    const firstPlayValue = getValForPosition(nonJokers[0]);
     const lastPlayValue = nonJokers.length === 2
-      ? getCardValue(nonJokers[1].rank)
+      ? getValForPosition(nonJokers[1])
       : firstPlayValue;
 
     if (position === 'left') {

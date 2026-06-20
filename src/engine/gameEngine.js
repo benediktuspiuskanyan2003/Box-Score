@@ -17,7 +17,8 @@ import {
   checkCateTangan,
   canExtendSonMultiple,
   getValidMoves,
-  jokerHasValidUse
+  jokerHasValidUse,
+  detectSonJokerAmbiguity,
 } from './cardValidator.js';
 
 /**
@@ -106,6 +107,7 @@ export function initializeGame(players, minusLimit = -300) {
   const playerStates = players.map((player, idx) => ({
     id: player.id,
     name: player.name,
+    profilePicture: player.profilePicture || null,
     isBot: player.isBot || false,
     hand: playerCards[idx] || [],
     score: 0,
@@ -185,7 +187,7 @@ export function playCardToSon(gameState, playerIdx, cardIdx, sonIdx, position = 
  * Pemain buat Son baru
  * @param {string} jokerPosition - 'auto' | 'kiri' | 'kanan' | 'gap'
  */
-export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'auto') {
+export function playNewSon(gameState, playerIdx, cardIndices, jokerLeftCount = null) {
   const player = gameState.players[playerIdx];
   if (!player || player.status !== 'active') {
     return { success: false, reason: 'Pemain tidak aktif' };
@@ -196,30 +198,30 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
   if (gameState.phase === 'first_son' && gameState.sonFirstCompleted.includes(playerIdx)) {
     return { success: false, reason: 'Anda sudah membuat SON pertama di ronde ini' };
   }
-
+ 
   const cards = cardIndices.map(idx => player.hand[idx]).filter(c => c);
   if (cards.length < 3) {
     return { success: false, reason: 'Butuh minimal 3 kartu' };
   }
-
+ 
   if (cards.length > 5) {
-  return { success: false, reason: 'SON baru maksimal 5 kartu' };
+    return { success: false, reason: 'SON baru maksimal 5 kartu' };
   }
-
+ 
   // ✅ Blokir Joker di fase first_son
   if (gameState.phase === 'first_son') {
     if (cards.some(c => c.isJoker)) {
       return { success: false, reason: 'Joker tidak boleh digunakan untuk Son Pertama' };
     }
   }
-
+ 
   const validationResult = isValidSon(cards);
   if (!validationResult.valid) {
     return { success: false, reason: 'Tidak membentuk Son yang valid' };
   }
-
+ 
   const aPosition = validationResult.aPosition;
-
+ 
   if (gameState.phase === 'first_son') {
     gameState.sonFirstCompleted.push(playerIdx);
     const needSon = gameState.players
@@ -229,12 +231,10 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
       gameState.phase = 'play';
     }
   }
-
-  // Pisahkan joker dan non-joker
+ 
   const nonJokers = cards.filter(c => !c.isJoker);
   const jokers = cards.filter(c => c.isJoker);
-
-  // Sort non-jokers dengan A=14 jika aPosition === 'akhir'
+ 
   const sortedNonJokers = [...nonJokers].sort((a, b) => {
     let valA = getCardValue(a.rank);
     let valB = getCardValue(b.rank);
@@ -244,25 +244,25 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
     }
     return valA - valB;
   });
-
+ 
   const getNumericalValue = (card) => {
     const v = getCardValue(card.rank);
     return (aPosition === 'akhir' && card.rank === 'A') ? 14 : v;
   };
-
+ 
   let sortedCards = [];
-
+ 
   if (jokers.length === 0) {
     sortedCards = sortedNonJokers;
   } else {
     const minVal = getNumericalValue(sortedNonJokers[0]);
     const maxVal = getNumericalValue(sortedNonJokers[sortedNonJokers.length - 1]);
     const filledValues = new Set(sortedNonJokers.map(c => getNumericalValue(c)));
-
+ 
     let jokerPool = [...jokers];
     const builtCards = [];
-
-    // Isi range minVal..maxVal dulu (gap tengah)
+ 
+    // ── STEP 1: isi gap WAJIB di tengah dulu (selalu otomatis) ──
     for (let v = minVal; v <= maxVal; v++) {
       if (filledValues.has(v)) {
         builtCards.push(sortedNonJokers.find(c => getNumericalValue(c) === v));
@@ -270,33 +270,40 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
         builtCards.push(jokerPool.shift());
       }
     }
-
-    // Sisa joker setelah isi gap → posisikan sesuai jokerPosition
+ 
+    // ── STEP 2: sisa joker (kalau ada) ditaruh di edge sesuai jokerLeftCount ──
     if (jokerPool.length > 0) {
-      if (jokerPosition === 'kiri') {
-        sortedCards = [...jokerPool, ...builtCards];
-      } else {
-        // Default / 'kanan' / 'auto': append ke kanan
-        sortedCards = [...builtCards, ...jokerPool];
-      }
+      const edgeJokerCount = jokerPool.length;
+ 
+      // Default (auto / null): semua sisa ke kanan, sama seperti behaviour lama 'auto'/'kanan'
+      const leftCount = jokerLeftCount === null || jokerLeftCount === undefined
+        ? 0
+        : Math.max(0, Math.min(jokerLeftCount, edgeJokerCount));
+ 
+      const rightCount = edgeJokerCount - leftCount;
+ 
+      const leftJokers = jokerPool.slice(0, leftCount);
+      const rightJokers = jokerPool.slice(leftCount, leftCount + rightCount);
+ 
+      sortedCards = [...leftJokers, ...builtCards, ...rightJokers];
     } else {
       sortedCards = builtCards;
     }
   }
-
+ 
   const newSon = {
     id: `son_${Date.now()}`,
     cards: sortedCards,
     playerId: player.id
   };
-
+ 
   gameState.meja.sons.push(newSon);
-
+ 
   const sortedIndices = [...cardIndices].sort((a, b) => b - a);
   for (const idx of sortedIndices) {
     player.hand.splice(idx, 1);
   }
-
+ 
   gameState.history.push({
     playerIdx,
     action: 'new_son',
@@ -304,10 +311,9 @@ export function playNewSon(gameState, playerIdx, cardIndices, jokerPosition = 'a
     cardCount: cards.length,
     timestamp: Date.now()
   });
-
-  // playNewSon():
+ 
   if (player.hand.length === 0) return handleCate(gameState, playerIdx, cards);
-
+ 
   advanceTurn(gameState);
   return { success: true, gameState };
 }
@@ -772,10 +778,12 @@ export function nextRound(gameState) {
     }
   });
 
+  // ↓↓↓ INI forEach YANG ASLI, tinggal tambah 1 baris di dalamnya ↓↓↓
   gameState.players.forEach((player, idx) => {
     player.hand = playerCards[idx] || [];
     player.score = 0;
     player.isBot = player.isBot || false;
+    player.profilePicture = player.profilePicture || null;  // ← TAMBAH BARIS INI SAJA
     if (cateTanganPlayers.some(p => p.playerId === player.id)) {
       player.status = 'cate_tangan';
       player.score = 50;
@@ -801,7 +809,7 @@ export function nextRound(gameState) {
   gameState.cateType = cateTanganPlayers.length > 0 ? 'tangan' : null;
   gameState.sonFirstCompleted = [];
   gameState.history = [];
-  gameState.noWinner = false;  // ✅ TAMBAHAN: reset flag noWinner
+  gameState.noWinner = false;
 
   return { success: true, gameState };
 }
