@@ -171,7 +171,7 @@ const handleRemoveBot = async (botId) => {
   const allPlayers = [...humanPlayers, ...botPlayers];
   console.log('allPlayers:', allPlayers); // ← tambah
   
-  const initialGameState = initializeGame(allPlayers, -300);
+  const initialGameState = initializeGame(allPlayers, -300, room.id);
   console.log('initialGameState:', initialGameState); // ← tambah
 
   // Simpan ke Supabase

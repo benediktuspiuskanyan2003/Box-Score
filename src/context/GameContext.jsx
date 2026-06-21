@@ -237,7 +237,8 @@ export function GameProvider({ children, roomId, myUserId }) {
           name: p.name,
           isBot: p.isBot || false,
         })),
-        gameState.minusLimit
+        gameState.minusLimit,
+        gameState.roomId
       );
       freshState.round = gameState.round;
 

@@ -138,18 +138,18 @@ function hasValidMoves(gameState, playerIdx) {
 /**
  * Initialize game baru
  */
-export function initializeGame(players, minusLimit = -300) {
+export function initializeGame(players, minusLimit = -300, roomId = null) {
   const deck = createDeck();
   const shuffled = shuffleDeck(deck);
   const { playerCards, remaining } = dealCards(shuffled, players.length);
-
+ 
   const cateTanganPlayers = [];
   players.forEach((player, idx) => {
     if (checkCateTangan(playerCards[idx])) {
       cateTanganPlayers.push({ playerId: player.id, score: 50 });
     }
   });
-
+ 
   const playerStates = players.map((player, idx) => ({
     id: player.id,
     name: player.name,
@@ -160,8 +160,9 @@ export function initializeGame(players, minusLimit = -300) {
     status: cateTanganPlayers.some(p => p.playerId === player.id) ? 'cate_tangan' : 'active',
     totalScore: 0
   }));
-
+ 
   const gameState = {
+    roomId, // ✅ TAMBAH INI -- supaya PlayGameContent bisa akses untuk voice chat
     players: playerStates,
     currentTurnIdx: 0,
     round: 1,
@@ -173,9 +174,9 @@ export function initializeGame(players, minusLimit = -300) {
     gameOver: false,
     cateType: null,
     sonFirstCompleted: [],
-    noWinner: false  // ✅ TAMBAHAN: flag untuk ronde tanpa pemenang
+    noWinner: false
   };
-
+ 
   if (cateTanganPlayers.length > 0) {
     gameState.cateType = 'tangan';
     cateTanganPlayers.forEach(p => {
@@ -186,7 +187,7 @@ export function initializeGame(players, minusLimit = -300) {
       }
     });
   }
-
+ 
   return gameState;
 }
 

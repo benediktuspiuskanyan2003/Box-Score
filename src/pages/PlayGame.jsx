@@ -15,6 +15,7 @@ import { SVG_CARDS_URL, CARD_BACK_URL } from '../utils/cardMapper';
 import { useAuth } from '../context/AuthContext';
 import { computeBotAction } from '../engine/botEngine';
 import { motion, LayoutGroup } from 'framer-motion';
+import { useVoiceChat } from '../hooks/useVoiceChat';
 
 export function PlayGame() {
   const location = useLocation();
@@ -395,6 +396,21 @@ function PlayGameContent() {
   const failedSonCount = gameState?.players.filter(p => p.status === 'son_failed').length || 0;
   const playerCount = gameState?.players.length || 0;
   const positions = gameState ? getPlayerPositions(playerCount, myPlayerIdx) : {};
+
+  const {
+    speakerOn,
+    micOn,
+    micPermissionDenied,
+    connectedPeers,
+    toggleSpeaker,
+    toggleMic,
+  } = useVoiceChat({
+    roomId: gameState ? (gameState.roomId || null) : null, // lihat catatan di bawah
+    myUserId: myPlayer?.id,
+    myName: myPlayer?.name,
+    enabled: !!gameState && !!myPlayer, // baru aktif setelah game state & player siap
+  });
+
   useEffect(() => {
   if (!gameState || loadingGame) return; // ← tunggu loading selesai dulu
   if (myPlayerIdx < 0) {
@@ -1110,26 +1126,74 @@ useEffect(() => {
           )}
         </div>
       </div>
-      {/* Tombol Ranking — pojok kanan atas */}
-      <button
-        onClick={() => setShowRanking(true)}
-        style={{
+      {/* Tombol Ranking, mic, speaker — pojok kanan atas */}
+      <div style={{
           position: 'absolute',
           top: 6,
           right: 6,
           zIndex: 30,
-          background: 'rgba(0,0,0,0.45)',
-          color: '#fde68a',
-          fontSize: 10,
-          fontWeight: 700,
-          padding: '4px 10px',
-          borderRadius: 6,
-          border: 'none',
-          cursor: 'pointer',
-        }}
-      >
-        🏆 Ranking
-      </button>
+          display: 'flex',
+          gap: 6,
+          alignItems: 'center',
+        }}>
+          {/* Icon Mic */}
+          <button
+            onClick={toggleMic}
+            disabled={!speakerOn}
+            title={micPermissionDenied ? 'Izin mikrofon ditolak' : (micOn ? 'Matikan mic' : 'Nyalakan mic')}
+            style={{
+              width: 28, height: 28,
+              borderRadius: '50%',
+              border: 'none',
+              background: !speakerOn
+                ? 'rgba(255,255,255,0.08)'
+                : micOn ? 'rgba(34,197,94,0.85)' : 'rgba(0,0,0,0.45)',
+              color: !speakerOn ? 'rgba(255,255,255,0.3)' : '#fff',
+              fontSize: 13,
+              cursor: speakerOn ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s',
+            }}
+          >
+            {micOn ? '🎤' : '🎤̶'}
+          </button>
+        
+          {/* Icon Speaker */}
+          <button
+            onClick={toggleSpeaker}
+            title={speakerOn ? 'Matikan speaker' : 'Nyalakan speaker'}
+            style={{
+              width: 28, height: 28,
+              borderRadius: '50%',
+              border: 'none',
+              background: speakerOn ? 'rgba(0,0,0,0.45)' : 'rgba(239,68,68,0.85)',
+              color: '#fff',
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s',
+            }}
+          >
+            {speakerOn ? '🔊' : '🔇'}
+          </button>
+        
+          {/* Tombol Ranking — pindah ke sini, sejajar */}
+          <button
+            onClick={() => setShowRanking(true)}
+            style={{
+              background: 'rgba(0,0,0,0.45)',
+              color: '#fde68a',
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: 6,
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            🏆 Ranking
+          </button>
+        </div>
 
       {/* ══ BAWAH: kartu overlay + action buttons di kanan ══ */}
       <div style={{
