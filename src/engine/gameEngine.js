@@ -53,28 +53,74 @@ export function throwJoker(gameState, playerIdx, cardIdx) {
   if (gameState.currentTurnIdx !== playerIdx) {
     return { success: false, reason: 'Bukan giliran pemain ini' };
   }
-
+ 
   const card = player.hand[cardIdx];
   if (!card) return { success: false, reason: 'Kartu tidak ditemukan' };
   if (!card.isJoker) return { success: false, reason: 'Hanya Joker yang bisa dilempar' };
-
+ 
   // ✅ Validasi: joker ini memang tidak bisa dipakai di mana pun
   const canUse = jokerHasValidUse(cardIdx, player.hand, gameState.meja.sons, gameState.meja.boxes);
   if (canUse) {
     return { success: false, reason: 'Joker masih bisa digunakan, tidak bisa dilempar' };
   }
-
-  // Buang joker ke "discard pile" atau cukup hilangkan dari tangan
+ 
+  // Hapus dari tangan
   player.hand.splice(cardIdx, 1);
-
+ 
+  // ✅ FIX: simpan ke meja.discardedJokers, bukan hilang begitu saja.
+  // Joker ini tetap terlihat semua pemain sebagai "kuburan joker",
+  // tapi tidak bisa diambil/dipakai lagi oleh siapapun.
+  if (!gameState.meja.discardedJokers) gameState.meja.discardedJokers = [];
+  gameState.meja.discardedJokers.push({
+    ...card,
+    discardedBy: player.id,
+    discardedAt: Date.now(),
+  });
+ 
   gameState.history.push({
     playerIdx,
     action: 'throw_joker',
     timestamp: Date.now()
   });
-
+ 
   if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+ 
+  advanceTurn(gameState);
+  return { success: true, gameState };
+}
 
+export function throwJokerForced(gameState, playerIdx, cardIdx) {
+  const player = gameState.players[playerIdx];
+  if (!player || player.status !== 'active') {
+    return { success: false, reason: 'Pemain tidak aktif' };
+  }
+  if (gameState.currentTurnIdx !== playerIdx) {
+    return { success: false, reason: 'Bukan giliran pemain ini' };
+  }
+ 
+  const card = player.hand[cardIdx];
+  if (!card) return { success: false, reason: 'Kartu tidak ditemukan' };
+  if (!card.isJoker) return { success: false, reason: 'Hanya Joker yang bisa dilempar' };
+ 
+  // ✅ TIDAK ADA cek jokerHasValidUse di sini -- selalu izinkan.
+ 
+  player.hand.splice(cardIdx, 1);
+ 
+  if (!gameState.meja.discardedJokers) gameState.meja.discardedJokers = [];
+  gameState.meja.discardedJokers.push({
+    ...card,
+    discardedBy: player.id,
+    discardedAt: Date.now(),
+  });
+ 
+  gameState.history.push({
+    playerIdx,
+    action: 'throw_joker',
+    timestamp: Date.now()
+  });
+ 
+  if (player.hand.length === 0) return handleCate(gameState, playerIdx);
+ 
   advanceTurn(gameState);
   return { success: true, gameState };
 }
@@ -121,7 +167,7 @@ export function initializeGame(players, minusLimit = -300) {
     round: 1,
     phase: 'first_son',
     deck: remaining,
-    meja: { sons: [], boxes: [] },
+    meja: { sons: [], boxes: [], discardedJokers: [] },
     history: [],
     minusLimit,
     gameOver: false,
@@ -805,7 +851,7 @@ export function nextRound(gameState) {
   gameState.currentTurnIdx = highestScoreIdx;
   gameState.phase = 'first_son';
   gameState.deck = remaining;
-  gameState.meja = { sons: [], boxes: [] };
+  gameState.meja = { sons: [], boxes: [], discardedJokers: [] };
   gameState.cateType = cateTanganPlayers.length > 0 ? 'tangan' : null;
   gameState.sonFirstCompleted = [];
   gameState.history = [];

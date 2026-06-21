@@ -370,7 +370,7 @@ function PlayGameContent() {
   const {
     gameState, loadingGame, myPlayerIdx, isMyTurn,
     playNewSon, playNewBox, extendSon, addToBox,
-    playerPass, declareFailFirstSon, nextRound, throwJoker
+    playerPass, declareFailFirstSon, nextRound, throwJoker, throwJokerForced,
   } = useGameContext();
 
   const [selectedCards, setSelectedCards] = useState([]);
@@ -519,7 +519,7 @@ useEffect(() => {
 
     switch (action.type) {
       case 'new_son':
-        playNewSon(botIdx, action.cardIndices, action.jokerPosition || null);
+        playNewSon(botIdx, action.cardIndices, action.jokerLeftCount || null);
         break;
       case 'new_box':
         playNewBox(botIdx, action.cardIndices);
@@ -619,6 +619,30 @@ useEffect(() => {
     }
   };
 
+  const handleThrowSelectedJokerWithFeedback = () => {
+    if (selectedCards.length !== 1) return;
+    const card = myHand[selectedCards[0]];
+    if (!card?.isJoker) return;
+  
+    const canUse = jokerHasValidUse(
+      selectedCards[0], myHand, gameState.meja.sons, gameState.meja.boxes
+    );
+  
+    if (canUse) {
+      if (!confirm('Joker ini sebenarnya masih bisa dipakai untuk SON/BOX/extend. Tetap mau dibuang?')) {
+        return;
+      }
+      // ✅ User sudah confirm tetap mau buang -> pakai versi FORCED (selalu izinkan)
+      throwJokerForced(myPlayerIdx, selectedCards[0]);
+    } else {
+      // Joker memang sudah tidak berguna -> pakai throwJoker biasa (validasi tetap lolos)
+      throwJoker(myPlayerIdx, selectedCards[0]);
+    }
+  
+    setSelectedCards([]);
+    setAction(null);
+  };
+
   const validIndicesForHand = (() => {
     if (isFirstSonPhase) return sonCreationCards;
     const s = new Set([
@@ -627,6 +651,9 @@ useEffect(() => {
     ]);
     return Array.from(s);
   })();
+
+  const isSingleJokerSelected =
+  selectedCards.length === 1 && myHand[selectedCards[0]]?.isJoker;
 
   // ── LOADING ────────────────────────────────────────────────────
   if (loadingGame) {
@@ -1046,6 +1073,33 @@ useEffect(() => {
             </div>
           )}
 
+          {gameState.meja.discardedJokers && gameState.meja.discardedJokers.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            {/* Watermark kecil */}
+            <div style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'rgba(255,255,255,0.35)',
+              marginBottom: 4,
+            }}>
+              Izin Sekolah ({gameState.meja.discardedJokers.length})
+            </div>
+            <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              {gameState.meja.discardedJokers.map((joker, idx) => (
+                <div
+                  key={joker.id ? `${joker.id}-discarded-${idx}` : `discarded-${idx}`}
+                  style={{
+                    opacity: 0.55, // dibuat agak transparan, menandakan "sudah mati"/tidak bisa dipakai
+                    filter: 'grayscale(0.4)',
+                  }}
+                >
+                  <CardSprite card={joker} width={28} jokerIndex={idx} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
           {gameState.meja.sons.length === 0 && gameState.meja.boxes.length === 0 && (
             <div style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1283,6 +1337,18 @@ useEffect(() => {
                 }}
               >🃏 Joker ({throwableJokers.length})</button>
             )}
+
+            {isSingleJokerSelected && (
+            <button
+              onClick={handleThrowSelectedJokerWithFeedback}
+              style={{
+                padding: '7px 10px', borderRadius: 8, border: 'none',
+                fontSize: 11, fontWeight: 700,
+                background: '#9333ea', color: '#fff',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >Sekolah dulu🗑️</button>
+          )}
           </div>
         )}
       </div>

@@ -11,7 +11,8 @@ import {
   declareFailFirstSon,
   nextRound,
   getRoundScores,
-  throwJoker
+  throwJoker,
+  throwJokerForced,
 } from '../engine/gameEngine.js';
 
 const GameContext = createContext();
@@ -189,7 +190,9 @@ export function GameProvider({ children, roomId, myUserId }) {
     playNewSon: (playerIdx, cardIndices, jokerPosition = 'auto') => {
       const currentPlayer = gameState?.players[playerIdx];
       if (!currentPlayer?.isBot && !isMyTurn()) return;
+      console.log('[DEBUG] jokerPosition received:', jokerPosition, typeof jokerPosition);
       const result = playNewSon(gameState, playerIdx, cardIndices, jokerPosition);
+      console.log('[DEBUG] son cards after:', result.gameState?.meja?.sons?.slice(-1)[0]?.cards?.map(c => c.isJoker ? 'JOKER' : c.rank));
       if (result.success) syncToSupabase(result.gameState);
     },
 
@@ -274,6 +277,13 @@ export function GameProvider({ children, roomId, myUserId }) {
       const currentPlayer = gameState?.players[playerIdx];
       if (!currentPlayer?.isBot && !isMyTurn()) return;
       const result = throwJoker(gameState, playerIdx, cardIdx);
+      if (result.success) syncToSupabase(result.gameState);
+    },
+
+    throwJokerForced: (playerIdx, cardIdx) => {
+      const currentPlayer = gameState?.players[playerIdx];
+      if (!currentPlayer?.isBot && !isMyTurn()) return;
+      const result = throwJokerForced(gameState, playerIdx, cardIdx);
       if (result.success) syncToSupabase(result.gameState);
     },
   };
